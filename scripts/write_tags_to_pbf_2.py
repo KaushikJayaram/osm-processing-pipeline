@@ -1,0 +1,242 @@
+
+## 2. Optimized `write_tags_to_pbf.py` implementation
+#!/usr/bin/env python3
+
+import os
+import sys
+from typing import Dict, Any
+from datetime import datetime
+import logging
+
+import psycopg2
+import osmium as osm
+
+# Setup logging to both console and file
+def setup_logging():
+    """Setup logging to both console and file."""
+    # Create logs directory if it doesn't exist
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create log filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"write_tags_to_pbf_{timestamp}.log")
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
+            logging.StreamHandler()  # Also print to console
+        ]
+    )
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Logging initialized. Log file: {log_file}")
+    return logger, log_file
+
+# Initialize logger at module level
+logger, log_file = setup_logging()
+
+def log_print(message, level='info'):
+    """Print to console and log to file."""
+    print(message)
+    if level == 'info':
+        logger.info(message)
+    elif level == 'warning':
+        logger.warning(message)
+    elif level == 'error':
+        logger.error(message)
+    elif level == 'debug':
+        logger.debug(message)
+
+
+# Columns in osm_all_roads that should become tags on ways
+TAG_FIELDS = [
+    "road_classification",
+    "road_classification_i1",
+    "road_setting_i1",
+    "road_type_i1",
+    "road_classification_v2",
+    "maybe_mdr_primary",
+    "maybe_mdr_secondary",
+    "road_curvature_classification",
+    "road_curvature_ratio",
+    "road_scenery_urban",
+    "road_scenery_semiurban",
+    "road_scenery_rural",
+    "road_scenery_forest",
+    "road_scenery_hill",
+    "road_scenery_lake",
+    "road_scenery_beach",
+    "road_scenery_river",
+    "road_scenery_desert",
+    "road_scenery_field",
+    "road_scenery_saltflat",
+    "road_scenery_mountainpass",
+    "road_scenery_snowcappedmountain",
+    "road_scenery_plantation",
+    "road_scenery_backwater",
+    "rsbikeaccess",
+    "build_perc",
+    "population_density",
+]
+
+
+def _build_where_clause() -> str:
+    """
+    Build a WHERE clause that filters to rows where at least one tag field is non-NULL.
+    """
+    conditions = [f"{field} IS NOT NULL" for field in TAG_FIELDS]
+    return " OR ".join(conditions)
+
+
+def _load_extra_tags(db_config: Dict[str, Any]) -> Dict[int, Dict[str, str]]:
+    """
+    Load all extra tags from osm_all_roads into a single mapping:
+
+        { osm_id: { field_name: value_str, ... }, ... }
+
+    Only non-NULL values are included for each field.
+    Tag names are kept EXACTLY as column names (no prefixes/renaming).
+    """
+    log_print("[write_tags_to_pbf] Connecting to Postgres to load extra tags...")
+
+    conn = psycopg2.connect(
+        dbname=db_config["name"],
+        user=db_config["user"],
+        password=db_config["password"],
+        host=db_config["host"],
+        port=db_config["port"],
+    )
+
+    extra_tags: Dict[int, Dict[str, str]] = {}
+
+    try:
+        cursor = conn.cursor()
+
+        select_cols = ", ".join(["osm_id"] + TAG_FIELDS)
+        where_clause = _build_where_clause()
+        query = f"""
+            SELECT {select_cols}
+            FROM osm_all_roads
+            WHERE {where_clause}
+        """
+
+        log_print("[write_tags_to_pbf] Executing query to load tag fields from osm_all_roads...")
+        cursor.execute(query)
+
+        row_count = 0
+        for row in cursor:
+            row_count += 1
+            osm_id = int(row[0])
+            row_tags: Dict[str, str] = {}
+
+            # row[1:] corresponds to TAG_FIELDS in order
+            for idx, field in enumerate(TAG_FIELDS, start=1):
+                value = row[idx]
+                if value is not None:
+                    # keep tag name EXACTLY as field name, convert value to str
+                    row_tags[field] = str(value)
+
+            if row_tags:
+                extra_tags[osm_id] = row_tags
+
+        cursor.close()
+
+        log_print(
+            f"[write_tags_to_pbf] Loaded {row_count:,} rows from osm_all_roads, "
+            f"{len(extra_tags):,} ways with at least one extra tag."
+        )
+    finally:
+        conn.close()
+        log_print("[write_tags_to_pbf] Database connection closed.")
+
+    return extra_tags
+
+
+class WayHandler(osm.SimpleHandler):
+    """
+    Streaming handler that:
+    - Forwards nodes and relations unchanged
+    - For ways:
+        * If no 'highway' tag -> forward unchanged
+        * If 'highway' present and osm_id in extra_tags -> merge tags and write
+    """
+
+    def __init__(self, extra_tags: Dict[int, Dict[str, str]], writer: osm.SimpleWriter):
+        super().__init__()
+        self.extra_tags = extra_tags
+        self.writer = writer
+
+    def node(self, n):
+        self.writer.add_node(n)
+
+    def relation(self, r):
+        self.writer.add_relation(r)
+
+    def way(self, w):
+        # Fast path: skip any non-highway ways
+        if "highway" not in w.tags:
+            self.writer.add_way(w)
+            return
+
+        extra = self.extra_tags.get(w.id)
+        if not extra:
+            # Highway way but no extra tags -> forward unchanged
+            self.writer.add_way(w)
+            return
+
+        # Merge existing tags with extra tags
+        merged_tags = dict(w.tags)
+        merged_tags.update(extra)
+
+        # Use replace() to preserve other metadata (version, timestamp, etc.)
+        new_way = w.replace(tags=merged_tags)
+        self.writer.add_way(new_way)
+
+
+def write_tags_to_pbf(db_config, output_pbf_path):
+    """
+    Reads custom tag data from PostGIS (osm_all_roads), updates OSM way tags,
+    and writes them back to a new OSM PBF file.
+
+    - Input PBF path is taken from db_config["new_pbf_path"]
+    - Tags are added only for highway ways that appear in osm_all_roads
+    - Tag names are kept exactly as DB column names (no prefixing/renaming)
+    """
+
+    main_input_osm_file = db_config.get("new_pbf_path")
+    if not main_input_osm_file:
+        log_print("[ERROR] Missing new_pbf_path in db_config!", level='error')
+        sys.exit(1)
+
+    log_print(f"[write_tags_to_pbf] Input OSM PBF file: {main_input_osm_file}")
+    log_print(f"[write_tags_to_pbf] Output OSM PBF file: {output_pbf_path}")
+
+    # Ensure the output directory exists
+    output_dir = os.path.dirname(output_pbf_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    # Delete existing output file if it exists
+    if os.path.exists(output_pbf_path):
+        os.remove(output_pbf_path)
+
+    # Step 1: Load extra tags from PostGIS
+    extra_tags = _load_extra_tags(db_config)
+    log_print(
+        f"[write_tags_to_pbf] Extra tags loaded for {len(extra_tags):,} ways. "
+        "Starting PBF augmentation..."
+    )
+
+    # Step 2: Stream over the input PBF and write augmented PBF
+    writer = osm.SimpleWriter(output_pbf_path)
+    try:
+        handler = WayHandler(extra_tags, writer)
+        handler.apply_file(main_input_osm_file)
+    finally:
+        writer.close()
+
+    log_print("[write_tags_to_pbf] PBF augmentation completed. Updated OSM file saved.")

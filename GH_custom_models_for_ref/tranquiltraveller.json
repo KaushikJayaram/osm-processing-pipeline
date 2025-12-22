@@ -1,0 +1,27 @@
+{
+  "distance_influence": 20,
+  "priority": [
+    { "if": "!car_access", "multiply_by": "0" },
+    { "if": "rsbikeaccess == NO", "multiply_by": "0"},
+    { "if": "road_class == CONSTRUCTION", "multiply_by": "0"},
+    { "if": "road_access == PRIVATE", "multiply_by": "0.2" }
+  ],
+  "speed": [
+    { "if": "true", "limit_to": "0.9 * car_average_speed" },
+    { "if": "true", "limit_to": "120" },
+    { "if": "lanes == 1",  "multiply_by": "0.7"},
+    { "if": "surface==COBBLESTONE || surface==GRASS || surface==GRAVEL || surface==SAND || surface==PAVING_STONES || surface==DIRT || surface==GROUND || surface==UNPAVED || surface==COMPACTED",
+    "limit_to": "30"},
+
+
+    { "if": "road_classification_i1 == NH || road_classification_i1 == SH",  "limit_to": "80" },
+    { "else_if": "road_classification_i1 == NHORSH",  "limit_to": "60" },
+    { "else_if": "road_classification_i1 == URBANH || road_classification_i1 == URBANWOH",  "limit_to": "50" },
+    { "else_if": "road_classification_i1 == NHSHADJACENT || road_classification_i1 == INTERIOR",  "limit_to": "40" },
+    { "else": "",  "limit_to": "30" },
+
+    { "if": "curvature <= 0.60",  "multiply_by": "0.6" },
+    { "else_if": "curvature <= 0.90",  "multiply_by": "curvature" },
+    { "else": "",  "multiply_by": "1" }
+  ]
+}

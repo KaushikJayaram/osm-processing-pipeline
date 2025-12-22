@@ -1,0 +1,29 @@
+# Environment
+.env
+*.pkl
+
+# OS / Editor
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Data (user-provided)
+data/GHSL_data/*.tif
+data/Population_data/*.tif
+data/*.csv
+data/**/*.pdf
+
+# Output
+osm_pbf_inputs/
+osm_pbf_augmented_output/
+*.pbf
+*.osm.pbf
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
