@@ -2,7 +2,7 @@
 
 import json
 import os
-import psycopg2
+import psycopg
 import time
 import subprocess
 import logging
@@ -10,11 +10,38 @@ from datetime import datetime
 import gc
 import psutil
 
+# ============================================================================
+# PATH RESOLUTION
+# ============================================================================
+
+def get_project_base_dir():
+    """Get the base directory (osm-file-processing-v2) - one level up from scripts/."""
+    # Get the directory where this script is located (scripts/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Go up one level to get osm-file-processing-v2/
+    base_dir = os.path.dirname(script_dir)
+    return base_dir
+
+def resolve_project_path(path):
+    """Resolve a path relative to the project base directory."""
+    base_dir = get_project_base_dir()
+    
+    # If path is already absolute, return as-is
+    if os.path.isabs(path):
+        return path
+    
+    # If path starts with ./, remove it
+    if path.startswith('./'):
+        path = path[2:]
+    
+    # Join with base directory
+    return os.path.join(base_dir, path)
+
 # Setup logging to both console and file
 def setup_logging():
     """Setup logging to both console and file."""
-    # Create logs directory if it doesn't exist
-    log_dir = "logs"
+    # Create logs directory if it doesn't exist (relative to project root)
+    log_dir = resolve_project_path("logs")
     os.makedirs(log_dir, exist_ok=True)
     
     # Create log filename with timestamp
@@ -76,147 +103,9 @@ def execute_sql_file(cursor, filepath, params=None):
     elapsed_time = time.time() - start_time
     log_print(f"Executed {os.path.basename(filepath)} in {elapsed_time:.2f} seconds")
 
-def import_india_grids_from_csv(db_config, csv_file_path):
-    """
-    Uses psql to import the simplified india_grids.csv.
-    Assumes CSV has exactly 3 columns: grid_id, grid_geom (WKB hex), grid_area
-    """
-    import subprocess
-    import os
-    import psycopg2
-    import time
-
-    log_print(f"[INFO] Importing from {csv_file_path}...")
-    
-    # Convert to absolute path to avoid any path resolution issues
-    abs_csv_path = os.path.abspath(csv_file_path)
-    
-    # Ensure the file exists
-    if not os.path.exists(abs_csv_path):
-        raise FileNotFoundError(f"CSV file not found: {abs_csv_path}")
-    
-    try:
-        # Connect to create the table
-        conn = psycopg2.connect(
-            dbname=db_config['name'],
-            user=db_config['user'],
-            password=db_config.get('password', ''),
-            host=db_config['host'],
-            port=db_config['port']
-        )
-        conn.autocommit = True
-        cursor = conn.cursor()
-        
-        # Create the table if it doesn't exist
-        cursor.execute("""
-            DROP TABLE IF EXISTS india_grids;
-            CREATE TABLE india_grids (
-                grid_id INTEGER PRIMARY KEY,
-                grid_geom GEOMETRY(Polygon, 4326),
-                grid_area DOUBLE PRECISION
-            );
-        """)
-        cursor.close()
-        conn.close()
-        
-        log_print("[INFO] Created/truncated india_grids table")
-        
-        # Build the psql command
-        import_sql = f"""
-        \\set ON_ERROR_STOP on
-        \\timing on
-        \\echo Starting import at: \\! date
-        \\echo Importing from: {abs_csv_path}
-        
-        -- Create a temporary table
-        CREATE TEMP TABLE temp_import (
-            grid_id INTEGER,
-            grid_geom TEXT,
-            grid_area DOUBLE PRECISION
-        );
-        
-        -- Import the data
-        \\copy temp_import FROM '{abs_csv_path}' WITH (FORMAT csv, HEADER true, DELIMITER ',');
-        
-        -- Insert into the actual table
-        INSERT INTO india_grids (grid_id, grid_geom, grid_area)
-        SELECT 
-            grid_id, 
-            ST_GeomFromEWKB(decode(grid_geom, 'hex')),
-            grid_area
-        FROM temp_import
-        WHERE grid_geom IS NOT NULL;
-        
-        -- Verify the import
-        SELECT 
-            COUNT(*) as total_rows,
-            COUNT(grid_geom) as non_null_geometries,
-            MIN(grid_id) as min_id,
-            MAX(grid_id) as max_id
-        FROM india_grids;
-        
-        -- Clean up
-        DROP TABLE temp_import;
-        """
-        
-        # Write the SQL to a temporary file
-        with open('/tmp/import_grids.sql', 'w') as f:
-            f.write(import_sql)
-        
-        # Build the psql command
-        cmd = [
-            "psql",
-            "-d", db_config['name'],
-            "-U", db_config['user'],
-            "-h", db_config['host'],
-            "-p", str(db_config['port']),
-            "-v", "ON_ERROR_STOP=1",
-            "-f", "/tmp/import_grids.sql"
-        ]
-        
-        # Set up environment
-        env = os.environ.copy()
-        if 'password' in db_config and db_config['password']:
-            env['PGPASSWORD'] = db_config['password']
-        
-        # Run the import with a timeout
-        log_print("[INFO] Starting data import...")
-        start_time = time.time()
-        result = subprocess.run(
-            cmd, 
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minute timeout
-        )
-        
-        # Print the output
-        log_print(result.stdout)
-        if result.stderr:
-            log_print("Error output:", level='error')
-            log_print(result.stderr, level='error')
-            
-        log_print(f"[INFO] Import completed in {time.time() - start_time:.2f} seconds")
-        
-        # Check the return code
-        result.check_returncode()
-        
-    except subprocess.TimeoutExpired:
-        log_print("[ERROR] Import timed out after 5 minutes", level='error')
-        raise
-    except subprocess.CalledProcessError as e:
-        log_print(f"[ERROR] Import failed with return code {e.returncode}", level='error')
-        log_print(f"Command: {' '.join(e.cmd)}", level='error')
-        log_print(f"Output: {e.output}", level='error')
-        log_print(f"Error: {e.stderr}", level='error')
-        raise
-    except Exception as e:
-        log_print(f"[ERROR] Unexpected error: {e}", level='error')
-        raise
-
 def table_exists(db_name, db_user, db_host, db_port, db_password, table_name):
     """Checks if a table exists in the database."""
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_name,
         user=db_user,
         password=db_password,
@@ -242,16 +131,16 @@ def load_raster_data(db_config):
 
     raster_files = [
         {
-            "filepath": "data/Population_data/ind_pd_2020_1km_UNadj.tif",
+            "filepath": resolve_project_path("data/Population_data/ind_pd_2020_1km_UNadj.tif"),
             "table": "public.pop_density"
         },
         {
-            "filepath": "data/GHSL_data/GHS_BUILT_S_E2030_GLOBE_R2023A_4326_30ss_V1_0.tif",
+            "filepath": resolve_project_path("data/GHSL_data/GHS_BUILT_S_E2030_GLOBE_R2023A_4326_30ss_V1_0.tif"),
             "table": "public.built_up_area"
         }
     ]
     # Establish a database connection here
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config['name'],
         user=db_config['user'],
         password=db_config['password'],
@@ -303,6 +192,82 @@ def load_raster_data(db_config):
     cursor.close()
     conn.close()  # Ensure proper closing of the connection
     
+def perform_storage_cleanup(db_config, step_name="Unknown"):
+    """
+    Performs storage-specific cleanup:
+    - VACUUM FULL on tables with dead tuples
+    - Drops intermediate tables that are no longer needed
+    - Logs storage space reclaimed
+    """
+    log_print(f"[STORAGE_CLEANUP] Starting storage cleanup after {step_name}...")
+    cleanup_start = time.time()
+    
+    try:
+        conn = psycopg.connect(
+            dbname=db_config['name'],
+            user=db_config['user'],
+            password=db_config['password'],
+            host=db_config['host'],
+            port=db_config['port']
+        )
+        conn.autocommit = True
+        cursor = conn.cursor()
+        
+        # Get database size before cleanup
+        cursor.execute("SELECT pg_size_pretty(pg_database_size(current_database()));")
+        db_size_before = cursor.fetchone()[0]
+        log_print(f"[STORAGE_CLEANUP] Database size before cleanup: {db_size_before}")
+        
+        # VACUUM FULL on rs_highway_way_nodes (has many dead tuples)
+        log_print("[STORAGE_CLEANUP] Running VACUUM FULL on rs_highway_way_nodes (this may take a while)...")
+        try:
+            cursor.execute("VACUUM FULL rs_highway_way_nodes;")
+            log_print("[STORAGE_CLEANUP] VACUUM FULL completed for rs_highway_way_nodes")
+        except Exception as e:
+            log_print(f"[STORAGE_CLEANUP] Could not VACUUM FULL rs_highway_way_nodes: {e}", level='warning')
+        
+        # Drop old intermediate tables
+        tables_to_drop = [
+            'osm_all_roads_geom_ls',  # Old curvature v1 intermediate table (2.9 GB)
+            'rs_curvature_vertex_metrics',  # Intermediate curvature v2 table (35 GB)
+            'rs_curvature_way_vertices',  # Intermediate curvature v2 table (21 GB)
+            'rs_curvature_conflict_points',  # Intermediate curvature v2 table (3.2 GB)
+        ]
+        
+        for table in tables_to_drop:
+            try:
+                # Check if table exists and get its size
+                cursor.execute("""
+                    SELECT pg_size_pretty(pg_total_relation_size(%s))
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = %s;
+                """, (table, table))
+                result = cursor.fetchone()
+                if result and result[0]:
+                    table_size = result[0]
+                    log_print(f"[STORAGE_CLEANUP] Dropping table {table} (size: {table_size})...")
+                    cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
+                    log_print(f"[STORAGE_CLEANUP] Successfully dropped {table}")
+                else:
+                    log_print(f"[STORAGE_CLEANUP] Table {table} does not exist, skipping")
+            except Exception as e:
+                log_print(f"[STORAGE_CLEANUP] Could not drop {table}: {e}", level='warning')
+        
+        # Get database size after cleanup
+        cursor.execute("SELECT pg_size_pretty(pg_database_size(current_database()));")
+        db_size_after = cursor.fetchone()[0]
+        log_print(f"[STORAGE_CLEANUP] Database size after cleanup: {db_size_after}")
+        
+        cursor.close()
+        conn.close()
+        log_print("[STORAGE_CLEANUP] Storage cleanup completed")
+    except Exception as e:
+        log_print(f"[STORAGE_CLEANUP] Error during storage cleanup: {e}", level='error')
+    
+    elapsed = time.time() - cleanup_start
+    log_print(f"[STORAGE_CLEANUP] Storage cleanup completed in {elapsed:.2f} seconds")
+
+
 def perform_memory_cleanup(db_config, step_name="Unknown"):
     """
     Performs comprehensive memory cleanup:
@@ -310,6 +275,8 @@ def perform_memory_cleanup(db_config, step_name="Unknown"):
     - Runs PostgreSQL VACUUM ANALYZE
     - Forces Python garbage collection
     - Logs memory usage
+    
+    If step_name indicates curvature v2 completion, also performs storage cleanup.
     """
     log_print(f"[MEMORY_CLEANUP] Starting cleanup after {step_name}...")
     cleanup_start = time.time()
@@ -325,7 +292,7 @@ def perform_memory_cleanup(db_config, step_name="Unknown"):
     
     # Run PostgreSQL VACUUM ANALYZE to free up memory and update statistics
     try:
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             dbname=db_config['name'],
             user=db_config['user'],
             password=db_config['password'],
@@ -339,7 +306,8 @@ def perform_memory_cleanup(db_config, step_name="Unknown"):
         cursor.execute("VACUUM ANALYZE osm_all_roads;")
         
         # Also vacuum other large tables if they exist
-        for table in ['india_grids', 'pop_density', 'built_up_area']:
+        # (helps QGIS performance + keeps query planning sane after big updates)
+        for table in ['india_grids', 'pop_density', 'built_up_area', 'rs_curvature_way_summary']:
             try:
                 cursor.execute(f"VACUUM ANALYZE {table};")
                 log_print(f"[MEMORY_CLEANUP] VACUUM ANALYZE completed for {table}")
@@ -360,6 +328,11 @@ def perform_memory_cleanup(db_config, step_name="Unknown"):
     log_print(f"[MEMORY_CLEANUP] Memory after cleanup: {mem_after:.2f} GB")
     log_print(f"[MEMORY_CLEANUP] Memory freed: {mem_freed:.2f} GB")
     log_print(f"[MEMORY_CLEANUP] Cleanup completed in {elapsed:.2f} seconds")
+    
+    # Perform storage cleanup after curvature v2 processing (not v1)
+    # Only trigger for curvature v2, not legacy v1
+    if "Curvature" in step_name and ("v2" in step_name or ("Part 2" in step_name and "v1" not in step_name and "Legacy" not in step_name)):
+        perform_storage_cleanup(db_config, step_name)
 
 def add_custom_tags(db_config):
     """Executes raster loading first, then SQL scripts in four parts."""
@@ -371,7 +344,7 @@ def add_custom_tags(db_config):
 
     # Step 1: Connect to PostgreSQL before loading raster data
     conn_start_time = time.time()
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config['name'],
         user=db_config['user'],
         password=db_config['password'],
@@ -386,18 +359,14 @@ def add_custom_tags(db_config):
 
     # **PART 1: Setting Road Classification**
     log_print("[add_custom_tags] Part 1: Setting Road Classification...")
-    sql_dir = "sql/road_classification"
-    india_grids_csv = "data/india_grids.csv"
+    sql_dir = resolve_project_path("sql/road_classification")
 
     # Step 1: Handle india_grids
     if table_exists(db_config['name'], db_config['user'], db_config['host'], db_config['port'], db_config['password'], 'india_grids'):
         log_print("[INFO] Table 'india_grids' already exists, skipping creation.")
     else:
-        if os.path.exists(india_grids_csv):
-            log_print(f"[INFO] Found {india_grids_csv}, using it instead of generating grids.")
-        else:
-            log_print(f"[INFO] {india_grids_csv} not found, generating grids from scratch.")
-            execute_sql_file(cursor, os.path.join(sql_dir, "01_create_india_grids.sql"))
+        log_print("[INFO] Table 'india_grids' does not exist, generating grids from scratch.")
+        execute_sql_file(cursor, os.path.join(sql_dir, "01_create_india_grids.sql"))
 
     conn.commit()
 
@@ -429,7 +398,7 @@ def add_custom_tags(db_config):
     # **PART 2: Setting Road Curvature Classification**
     log_print("[add_custom_tags] Part 2: Setting Road Curvature Classification...")
     # Reopen connection for Part 2
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config['name'],
         user=db_config['user'],
         password=db_config['password'],
@@ -438,10 +407,22 @@ def add_custom_tags(db_config):
     )
     cursor = conn.cursor()
     
-    sql_dir = "sql/road_curvature_classification"
+    # Curvature v2 mini-module:
+    # - Requires Lua3 import: scripts/Lua3_RouteProcessing_with_curvature.lua
+    # - Produces rs_curvature_way_summary and (optionally) copies summary fields onto osm_all_roads
+    # - First populates node coordinates (idempotent, skips if >95% already populated)
+    sql_dir = resolve_project_path("sql/road_curvature_v2")
     road_curvature_sql_files = [
-        "051_calculate_curvature_and_update.sql",
+        "00_populate_node_coordinates.sql",  # Populate coordinates in rs_highway_way_nodes (idempotent)
+        "00_schema.sql",
+        "01_prepare_inputs.sql",
+        "02_compute_vertex_angles.sql",
+        "03_classify_radius_and_segment_meters.sql",
+        "04_conflict_zone_suppression.sql",
+        "05_aggregate_to_way.sql",
+        "06_optional_update_osm_all_roads.sql",
     ]
+
 
     for sql_file in road_curvature_sql_files:
         filepath = os.path.join(sql_dir, sql_file)
@@ -460,7 +441,7 @@ def add_custom_tags(db_config):
     # **PART 3: Setting Road Scenery**
     log_print("[add_custom_tags] Part 3: Setting Road Scenery...")
     # Reopen connection for Part 3
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config['name'],
         user=db_config['user'],
         password=db_config['password'],
@@ -469,11 +450,11 @@ def add_custom_tags(db_config):
     )
     cursor = conn.cursor()
     
-    sql_dir = "sql/road_scenery"
+    sql_dir = resolve_project_path("sql/road_scenery")
     road_scenery_sql_files = [
         "01_scenery_processing_add_columns.sql",
-        "02_scenery_urban_and_semi_urban.sql",
         "00_reset_all_scenery.sql",
+        "02_scenery_urban_and_semi_urban.sql",
         "03_scenery_forest.sql",
         "04_scenery_hill.sql",
         "05_scenery_lake.sql",
@@ -501,7 +482,7 @@ def add_custom_tags(db_config):
     # **PART 4: Setting Road Access**
     log_print("[add_custom_tags] Part 4: Setting Road Access...")
     # Reopen connection for Part 4
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config['name'],
         user=db_config['user'],
         password=db_config['password'],
@@ -510,7 +491,7 @@ def add_custom_tags(db_config):
     )
     cursor = conn.cursor()
     
-    sql_dir = "sql/road_access"
+    sql_dir = resolve_project_path("sql/road_access")
     road_access_sql_files = ["01_rsbikeaccess_update.sql"]
 
     for sql_file in road_access_sql_files:
@@ -522,8 +503,78 @@ def add_custom_tags(db_config):
         else:
             log_print(f"[WARNING] File {sql_file} does not exist. Skipping.", level='warning')
 
+    # Close connection and cleanup after Part 4
     cursor.close()
     conn.close()
+    perform_memory_cleanup(db_config, "Part 4: Road Access")
+
+    # **PART 5: Intersection Speed Degradation (v2)**
+    log_print("[add_custom_tags] Part 5: Intersection Speed Degradation (v2)...")
+    # Reopen connection for Part 5
+    conn = psycopg.connect(
+        dbname=db_config['name'],
+        user=db_config['user'],
+        password=db_config['password'],
+        host=db_config['host'],
+        port=db_config['port']
+    )
+    cursor = conn.cursor()
+    
+    sql_dir = resolve_project_path("sql/road_intersection_density")
+    intersection_density_sql_files = [
+        "00_schema_v2.sql",
+        "01_find_and_categorize_intersections_v2.sql",
+        "02_map_intersections_to_ways_v2.sql",
+        "03_calculate_base_degradation_v2.sql",
+        "04_calculate_final_degradation_v2.sql",
+    ]
+
+    for sql_file in intersection_density_sql_files:
+        filepath = os.path.join(sql_dir, sql_file)
+        if os.path.exists(filepath):
+            execute_sql_file(cursor, filepath)
+            conn.commit()
+            log_print(f"Finished execution of {sql_file}")
+        else:
+            log_print(f"[WARNING] File {sql_file} does not exist. Skipping.", level='warning')
+
+    # Close connection and cleanup after Part 5
+    cursor.close()
+    conn.close()
+    perform_memory_cleanup(db_config, "Part 5: Intersection Speed Degradation (v2)")
+
+    # **PART 6: Road Persona Scoring**
+    # Computes 4 persona scores on osm_all_roads for QGIS inspection.
+    log_print("[add_custom_tags] Part 6: Road Persona Scoring...")
+    conn = psycopg.connect(
+        dbname=db_config['name'],
+        user=db_config['user'],
+        password=db_config['password'],
+        host=db_config['host'],
+        port=db_config['port']
+    )
+    cursor = conn.cursor()
+
+    sql_dir = resolve_project_path("sql/road_persona")
+    road_persona_sql_files = [
+        "00_add_persona_columns.sql",
+        "01_compute_persona_base_scores.sql",
+        "02_compute_persona_corridors_and_final.sql",
+    ]
+
+    for sql_file in road_persona_sql_files:
+        filepath = os.path.join(sql_dir, sql_file)
+        if os.path.exists(filepath):
+            execute_sql_file(cursor, filepath)
+            conn.commit()
+            log_print(f"Finished execution of {sql_file}")
+        else:
+            log_print(f"[WARNING] File {sql_file} does not exist. Skipping.", level='warning')
+
+    cursor.close()
+    conn.close()
+    perform_memory_cleanup(db_config, "Part 6: Road Persona Scoring")
+
     log_time("SQL script execution", overall_start_time)
     message = "[add_custom_tags] Completed all processing steps."
     log_print(message)
