@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import subprocess
 from datetime import datetime
 import logging
@@ -124,11 +125,6 @@ def import_into_postgres(pbf_file, db_config, style_lua_script):
 
     log_print("[import_into_postgres] PostGIS, PostGIS Raster, and HSTORE extensions are set up.")
 
-    # Check if the target table already exists - this is useful for reruns to not reimport when the local db exists already
-    #if table_exists(db_name, db_user, db_host, db_port, db_password, 'rs_forest'):
-    #    log_print("[import_into_postgres] 'rs_forest' table already exists. Skipping import.")
-    #    return
-
     # 2. Run osm2pgsql to import the PBF
     log_print("[import_into_postgres] Starting osm2pgsql import...")
     cmd_osm2pgsql = [
@@ -168,3 +164,46 @@ def import_into_postgres(pbf_file, db_config, style_lua_script):
         raise subprocess.CalledProcessError(process.returncode, cmd_osm2pgsql)
 
     log_print("[import_into_postgres] Import completed successfully!")
+    
+    # 3. Validate that import created required tables (CRITICAL CHECK)
+    log_print("[import_into_postgres] Validating import - checking required tables exist...")
+    validation_script = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),  # Go up from scripts/ to root
+        "sql", "road_curvature_v2", "00_validate_import.sql"
+    )
+    
+    if os.path.exists(validation_script):
+        log_print(f"[import_into_postgres] Running validation script: {validation_script}")
+        cmd_validate = [
+            "psql",
+            "-U", db_user,
+            "-h", db_host,
+            "-p", db_port,
+            "-d", db_name,
+            "-f", validation_script,
+            "-v", "ON_ERROR_STOP=1"  # Stop on any error
+        ]
+        
+        result = subprocess.run(cmd_validate, capture_output=True, text=True, env=env)
+        
+        if result.returncode != 0:
+            log_print(f"[import_into_postgres] VALIDATION FAILED!", level='error')
+            log_print(f"[import_into_postgres] Validation error output:\n{result.stderr}", level='error')
+            log_print(f"[import_into_postgres] Validation stdout:\n{result.stdout}", level='error')
+            raise RuntimeError(
+                "OSM import validation failed. Required tables were not created correctly. "
+                "This means the import cannot be used for curvature calculations. "
+                "Re-run the import with Lua3_RouteProcessing_with_curvature.lua. "
+                "See validation error above for details."
+            )
+        
+        # Extract NOTICE messages (success messages) from output
+        if result.stdout:
+            for line in result.stdout.split('\n'):
+                if 'NOTICE' in line or '✓' in line:
+                    log_print(f"[import_into_postgres] {line.strip()}")
+        
+        log_print("[import_into_postgres] ✓ Import validation PASSED - required tables created successfully")
+    else:
+        log_print(f"[import_into_postgres] WARNING: Validation script not found at {validation_script}. Skipping validation.", level='warning')
+        log_print("[import_into_postgres] WARNING: Proceeding without validation - this is risky!", level='warning')

@@ -2,6 +2,27 @@
 -- Inspired by roadcurvature.com "Avoiding congestion and conflict zones" (30m both directions).
 -- https://roadcurvature.com/
 
+-- VALIDATION: Check that vertex_metrics has cumulative distance data
+DO $$
+DECLARE
+    total_rows BIGINT;
+    null_cum_m_count BIGINT;
+BEGIN
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE cum_m IS NULL)
+    INTO total_rows, null_cum_m_count
+    FROM rs_curvature_vertex_metrics;
+    
+    IF total_rows = 0 THEN
+        RAISE EXCEPTION 'ERROR: rs_curvature_vertex_metrics table is empty. Run 02_compute_vertex_angles.sql first.';
+    END IF;
+    
+    IF null_cum_m_count = total_rows THEN
+        RAISE EXCEPTION 'ERROR: All cum_m values are NULL in rs_curvature_vertex_metrics (%s rows). Cannot compute conflict suppression distances.', total_rows;
+    END IF;
+    
+    RAISE NOTICE 'Validation passed: %s rows in rs_curvature_vertex_metrics, %s have NULL cum_m', total_rows, null_cum_m_count;
+END $$;
+
 TRUNCATE rs_curvature_conflict_points;
 
 WITH derived_intersections AS (

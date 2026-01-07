@@ -1,6 +1,63 @@
 -- Curvature v2: compute per-vertex turning geometry + radius proxy.
 -- Uses ordered way nodes from rs_curvature_way_vertices.
 
+-- VALIDATION: Quick check that vertices table has geometry data
+-- Uses sampling to avoid expensive full table scans on large datasets
+DO $$
+DECLARE
+    has_data BOOLEAN;
+    has_geoms BOOLEAN;
+    sample_null_count BIGINT;
+    sample_total BIGINT;
+BEGIN
+    -- Quick existence check (uses index if available, very fast)
+    SELECT EXISTS(SELECT 1 FROM rs_curvature_way_vertices LIMIT 1) INTO has_data;
+    
+    IF NOT has_data THEN
+        RAISE EXCEPTION 'ERROR: rs_curvature_way_vertices table is empty. Run 01_prepare_inputs.sql first.';
+    END IF;
+    
+    -- Quick check: do we have ANY non-null geometries? (uses index, very fast)
+    SELECT EXISTS(
+        SELECT 1 FROM rs_curvature_way_vertices 
+        WHERE geom IS NOT NULL AND geom_3857 IS NOT NULL 
+        LIMIT 1
+    ) INTO has_geoms;
+    
+    IF NOT has_geoms THEN
+        RAISE EXCEPTION 'ERROR: All geometries are NULL in rs_curvature_way_vertices. Cannot compute distances. Check that rs_highway_way_nodes has valid lon/lat coordinates.';
+    END IF;
+    
+    -- Sample-based check: examine a random sample to estimate NULL percentage
+    -- This is much faster than full table scan (typically < 1 second)
+    SELECT 
+        COUNT(*),
+        COUNT(*) FILTER (WHERE geom IS NULL OR geom_3857 IS NULL)
+    INTO sample_total, sample_null_count
+    FROM (
+        SELECT geom, geom_3857 
+        FROM rs_curvature_way_vertices 
+        TABLESAMPLE SYSTEM (0.1)  -- Sample 0.1% of rows
+        LIMIT 10000  -- Cap at 10k rows for speed
+    ) sample;
+    
+    IF sample_total > 0 THEN
+        DECLARE
+            estimated_null_pct NUMERIC;
+        BEGIN
+            estimated_null_pct := (sample_null_count::NUMERIC / sample_total::NUMERIC) * 100;
+            
+            IF estimated_null_pct > 80 THEN
+                RAISE WARNING 'WARNING: Sample suggests ~%s%% of geometries may be NULL. Results may be incomplete. Consider checking full table if needed.', ROUND(estimated_null_pct, 1)::TEXT;
+            ELSE
+                RAISE NOTICE 'Validation passed: Table has data with geometries. Sample suggests ~%s%% NULL geometries.', ROUND(estimated_null_pct, 1)::TEXT;
+            END IF;
+        END;
+    ELSE
+        RAISE NOTICE 'Validation passed: Table has data with geometries.';
+    END IF;
+END $$;
+
 TRUNCATE rs_curvature_vertex_metrics;
 
 WITH params AS (
@@ -35,16 +92,18 @@ dists AS (
         next_geom,
         next_geom_3857,
         CASE
-            WHEN prev_geom IS NULL OR geom IS NULL THEN NULL
-            ELSE ST_Distance(prev_geom::geography, geom::geography)
+            WHEN prev_geom_3857 IS NULL OR geom_3857 IS NULL THEN NULL
+            -- Use geom_3857 (Web Mercator, SRID 3857): ST_Distance returns meters directly
+            -- This is more accurate than 4326 conversion and still fast (geometry, not geography)
+            ELSE ST_Distance(prev_geom_3857, geom_3857)
         END AS dist_prev_m,
         CASE
-            WHEN next_geom IS NULL OR geom IS NULL THEN NULL
-            ELSE ST_Distance(geom::geography, next_geom::geography)
+            WHEN next_geom_3857 IS NULL OR geom_3857 IS NULL THEN NULL
+            ELSE ST_Distance(geom_3857, next_geom_3857)
         END AS dist_next_m,
         CASE
-            WHEN prev_geom IS NULL OR next_geom IS NULL THEN NULL
-            ELSE ST_Distance(prev_geom::geography, next_geom::geography)
+            WHEN prev_geom_3857 IS NULL OR next_geom_3857 IS NULL THEN NULL
+            ELSE ST_Distance(prev_geom_3857, next_geom_3857)
         END AS dist_prev_next_m,
         CASE
             WHEN prev_geom_3857 IS NULL OR next_geom_3857 IS NULL OR geom_3857 IS NULL THEN NULL

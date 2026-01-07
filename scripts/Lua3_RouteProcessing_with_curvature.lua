@@ -1,5 +1,9 @@
 local tables = {}
 
+-- Node coordinate cache for curvature v2 processing
+-- This stores node_id -> {lon, lat} mappings
+local node_coords_cache = {}
+
 -- Existing tables (copied from Lua2_RouteProcessing.lua)
 
 tables.rs_forest = osm2pgsql.define_way_table('rs_forest', {
@@ -165,10 +169,20 @@ tables.rs_conflict_nodes = osm2pgsql.define_node_table('rs_conflict_nodes', {
     { column = 'tags', type = 'jsonb' }
 })
 
+-- Node coordinates table: store all node coordinates during node processing
+-- This persists across passes in slim mode (unlike in-memory cache)
+-- Store geometry and extract coordinates in SQL (more reliable than parsing in Lua)
+tables.rs_node_coords = osm2pgsql.define_node_table('rs_node_coords', {
+    { column = 'osm_id', type = 'bigint' },
+    { column = 'geometry', type = 'geometry', projection = 4326 },
+    { column = 'lon', type = 'real' },
+    { column = 'lat', type = 'real' }
+})
+
 -- Way-node sequence: one row per way node with ordering + lon/lat.
 -- Note: We store lon/lat as numbers, and build point geometries in SQL.
+-- Note: way_id is automatically added by define_way_table(), so we don't need to define it explicitly.
 tables.rs_highway_way_nodes = osm2pgsql.define_way_table('rs_highway_way_nodes', {
-    { column = 'way_id', type = 'bigint' },
     { column = 'node_id', type = 'bigint' },
     { column = 'seq', type = 'int' },
     { column = 'lon', type = 'real' },
@@ -190,6 +204,42 @@ local function get_lon_lat_from_location(loc)
 end
 
 function osm2pgsql.process_node(node)
+    -- Curvature v2: Store node coordinates in database table (persists across passes in slim mode)
+    -- Also keep in-memory cache for same-pass lookups
+    
+    -- Try to get point geometry (most reliable in flex mode)
+    local point_geom = node:as_point()
+    local lon, lat = nil, nil
+    
+    -- Try to get coordinates directly (method varies by osm2pgsql version)
+    if node.lon ~= nil and node.lat ~= nil then
+        lon = node.lon
+        lat = node.lat
+    elseif node.location ~= nil then
+        local loc = node.location
+        if type(loc) == 'table' then
+            lon = loc.lon or loc[1]
+            lat = loc.lat or loc[2]
+        end
+    end
+    
+    -- Store in cache if we have coordinates
+    if lon ~= nil and lat ~= nil then
+        node_coords_cache[node.id] = {lon = lon, lat = lat}
+    end
+    
+    -- CRITICAL: Store ALL nodes that have a point geometry
+    -- In OSM, nodes used by ways MUST have coordinates, and as_point() should work for them
+    -- If as_point() returns nil, the node doesn't have coordinates (rare, but possible)
+    if point_geom ~= nil then
+        tables.rs_node_coords:insert({
+            osm_id = node.id,
+            geometry = point_geom,
+            lon = lon,  -- May be nil, will be populated from geometry in SQL
+            lat = lat   -- May be nil, will be populated from geometry in SQL
+        })
+    end
+
     if node.tags.natural == 'peak' then
         tables.rs_hills_nodes:insert({
             osm_id = node.id,
@@ -338,13 +388,22 @@ function osm2pgsql.process_way(way)
         })
 
         -- Curvature v2: store ordered nodes for this highway way.
-        if way.nodes ~= nil then
+        -- In slim mode, cache doesn't persist, so we'll populate coordinates via SQL join after import
+        -- For now, store node_id and seq, coordinates will be populated in post-processing SQL
+        if way.nodes ~= nil and #way.nodes > 0 then
             for i, node_id in ipairs(way.nodes) do
-                -- get_node_location() is provided by osm2pgsql (slim/flat-nodes allow lookup)
-                local loc = osm2pgsql.get_node_location(node_id)
-                local lon, lat = get_lon_lat_from_location(loc)
+                local lon, lat = nil, nil
+                
+                -- Try in-memory cache first (works if nodes and ways processed in same pass)
+                local node_coords = node_coords_cache[node_id]
+                if node_coords ~= nil then
+                    lon = node_coords.lon
+                    lat = node_coords.lat
+                end
+                
+                -- way_id is automatically set by define_way_table() to way.id
+                -- Note: In slim mode, coordinates will be NULL here and populated via SQL join
                 tables.rs_highway_way_nodes:insert({
-                    way_id = way.id,
                     node_id = node_id,
                     seq = i,
                     lon = lon,

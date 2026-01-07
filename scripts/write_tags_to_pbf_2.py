@@ -8,7 +8,7 @@ from typing import Dict, Any
 from datetime import datetime
 import logging
 
-import psycopg2
+import psycopg
 import osmium as osm
 
 # Setup logging to both console and file
@@ -54,15 +54,25 @@ def log_print(message, level='info'):
 
 # Columns in osm_all_roads that should become tags on ways
 TAG_FIELDS = [
+    # Road classification
     "road_classification",
     "road_classification_i1",
     "road_setting_i1",
     "road_type_i1",
     "road_classification_v2",
-    "maybe_mdr_primary",
-    "maybe_mdr_secondary",
+    
+    # Curvature (legacy - from old pipeline)
     "road_curvature_classification",
     "road_curvature_ratio",
+    
+    # Curvature v2 (new pipeline - from sql/road_curvature_v2/)
+    "twistiness_score",
+    "twistiness_class",
+    "meters_sharp",
+    "meters_broad",
+    "meters_straight",
+    
+    # Scenery
     "road_scenery_urban",
     "road_scenery_semiurban",
     "road_scenery_rural",
@@ -78,9 +88,22 @@ TAG_FIELDS = [
     "road_scenery_snowcappedmountain",
     "road_scenery_plantation",
     "road_scenery_backwater",
+    
+    # Access and environment
     "rsbikeaccess",
     "build_perc",
     "population_density",
+    
+    # Intersection speed degradation (v2 - new approach)
+    "intersection_speed_degradation_base",  # Base degradation value (0.0-0.5, before setting/lanes factors)
+    "intersection_speed_degradation_setting_adjusted",  # Degradation value (0.0-0.5, after setting multiplier applied)
+    "intersection_speed_degradation_final",  # MULTIPLIER (0.5-1.0) - ready for GraphHopper multiply_by operations
+    
+    # Persona scores (simplified framework - Phase 1)
+    "persona_milemuncher_base_score",  # MileMuncher persona score (0-100)
+    "persona_cornercraver_base_score",  # CornerCraver persona score (0-100)
+    "persona_trailblazer_base_score",  # TrailBlazer persona score (0-100)
+    "persona_tranquiltraveller_base_score",  # TranquilTraveller persona score (0-100)
 ]
 
 
@@ -103,7 +126,7 @@ def _load_extra_tags(db_config: Dict[str, Any]) -> Dict[int, Dict[str, str]]:
     """
     log_print("[write_tags_to_pbf] Connecting to Postgres to load extra tags...")
 
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         dbname=db_config["name"],
         user=db_config["user"],
         password=db_config["password"],

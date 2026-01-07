@@ -34,10 +34,21 @@ This project automates the processing of OpenStreetMap (OSM) data to generate an
    cd osm-file-processing-v2
    ```
 
-2. **Install Python dependencies**
+2. **Set up Python virtual environment**
+   
+   This project uses the centralized virtual environment setup. From the project root:
    ```bash
-   pip install -r requirements.txt
+   # Set up the venv (includes osmium which requires system dependencies)
+   ./setup_venv.sh osm-file-processing-v2 osm-file-processing-v2/requirements.txt
+   
+   # Activate the venv
+   source activate_venv.sh osm-file-processing-v2
    ```
+   
+   **Note**: The `osmium` package requires system dependencies (cmake, boost, expat, etc.). 
+   If installation fails, run `./setup_osmium_deps.sh` first, then retry.
+   
+   See `README_VENV_SETUP.md` in the project root for more details.
 
 3. **Configure environment**
    ```bash
@@ -61,25 +72,40 @@ This project automates the processing of OpenStreetMap (OSM) data to generate an
 
 Simply run:
 ```bash
+# From project root, using the venv helper
+./run_with_venv.sh osm-file-processing-v2 osm-file-processing-v2/main.py
+
+# Or activate venv first
+source activate_venv.sh osm-file-processing-v2
+cd osm-file-processing-v2
 python main.py
 ```
 
-The pipeline will:
-1. Download the latest OSM PBF file for India (if not already present)
-2. Import the PBF into PostgreSQL using osm2pgsql
-3. Apply custom road attributes via SQL scripts:
-   - Road Classification
-   - Road Curvature Classification
+The pipeline consists of 4 main sections (each can be enabled/disabled via `PIPELINE_SECTIONS` in `main.py`):
+
+1. **Download OSM PBF** (optional): Downloads latest India OSM data from Geofabrik
+2. **Import to PostgreSQL** (optional): Uses osm2pgsql with Lua3 script to import OSM data. **Only run when importing a new PBF file.**
+3. **Add Custom Tags**: Executes SQL scripts to calculate and assign custom attributes:
+   - Road Classification (grid-based urban/semiurban/rural classification)
+   - Road Curvature Classification v2 (with coordinate population)
    - Road Scenery Attributes
-   - Road Access Permissions
-4. Write the augmented attributes back to a new PBF file
+   - Road Access Permissions (rsbikeaccess)
+   - Intersection Speed Degradation v2
+   - Persona Scoring (MileMuncher, CornerCraver, TrailBlazer, TranquilTraveller)
+4. **Write to PBF**: Writes calculated attributes back to a new augmented PBF file
 
-## Pipeline Steps
+## Pipeline Configuration
 
-1. **Download OSM PBF**: Downloads latest India OSM data from Geofabrik
-2. **Import to Postgres**: Uses osm2pgsql with custom Lua script to import OSM data
-3. **Add Custom Tags**: Executes SQL scripts to calculate and assign custom attributes
-4. **Write to PBF**: Writes calculated attributes back to the original PBF file
+Sections can be enabled/disabled by editing `PIPELINE_SECTIONS` in `main.py`:
+
+```python
+PIPELINE_SECTIONS = {
+    'download_osm': False,           # Downloads OSM PBF from Geofabrik
+    'import_to_postgres': False,     # Imports PBF into PostgreSQL (only for new PBF)
+    'add_custom_tags': True,          # Full custom tags pipeline (all 6 parts)
+    'write_pbf': True,                # Writes augmented attributes back to PBF
+}
+```
 
 ## Configuration
 
@@ -102,6 +128,7 @@ OUTPUT_PBF_PATH=./osm_pbf_augmented_output/india-latest-augmented.osm.pbf
 
 The pipeline automatically logs all operations to timestamped log files in the `logs/` directory:
 - `logs/main_pipeline_YYYYMMDD_HHMMSS.log` - Main pipeline execution log
+- `logs/import_into_postgres_YYYYMMDD_HHMMSS.log` - OSM import log (when import section is enabled)
 - `logs/add_custom_tags_YYYYMMDD_HHMMSS.log` - Custom tags processing log
 
 Logs are written to both console and file, so you can monitor progress in real-time and review logs later even if the terminal closes.
@@ -123,10 +150,18 @@ The pipeline adds the following custom attributes to roads:
     - `RuralNH`, `RuralSH`, `RuralMDR`, `RuralOH`, `RuralHAdj`, `RuralTrack`, `RuralPath`, `RuralWoH`
   - `road_classification` - Legacy 3-bucket. Values: `NH`, `SH`, `UNKNOWN`
   - `road_classification_v2` - Coarser bucket used for downstream display/bucketing. Values: `NH`, `SH`, `Urban`, `Service`, `Interior`
-- **MDR Classification (optional, DB)**: `mdr`, `maybe_mdr_primary`, `maybe_mdr_secondary`, `final_mdr_status` (from `sql/road_classification/09_add_mdr.sql`)
-- **Curvature**: `road_curvature_classification`, `road_curvature_ratio`
+- **Curvature v2**: 
+  - `meters_sharp`, `meters_broad`, `meters_straight` - Curvature buckets in meters
+  - `twistiness_score` - Numeric twistiness score
+  - `twistiness_class` - Classification: `straight`, `broad`, `sharp`
 - **Scenery**: `road_scenery_urban`, `road_scenery_semiurban`, `road_scenery_rural`, `road_scenery_forest`, `road_scenery_hill`, `road_scenery_lake`, `road_scenery_beach`, `road_scenery_river`, `road_scenery_desert`, `road_scenery_field`, `road_scenery_saltflat`, `road_scenery_mountainpass`, `road_scenery_snowcappedmountain`, `road_scenery_plantation`, `road_scenery_backwater`
-- **Access**: `rsbikeaccess`
+- **Access**: `rsbikeaccess` - Bike access permission flag
+- **Intersection Speed Degradation v2**: 
+  - `intersection_speed_degradation_base` - Base degradation (0.0-0.5)
+  - `intersection_speed_degradation_setting_adjusted` - Adjusted for urban/semiurban/rural
+  - `intersection_speed_degradation_final` - Final multiplier (0.5-1.0) for GraphHopper
+- **Persona Scoring**: 
+  - `persona_milemuncher_score`, `persona_cornercraver_score`, `persona_trailblazer_score`, `persona_tranquiltraveller_score` - Scores for each persona (0-100)
 - **Environment**: `build_perc`, `population_density`
 
 ### What gets written into the augmented PBF
@@ -161,33 +196,38 @@ The pipeline adds the following custom attributes to roads:
 
 ```
 osm-file-processing-v2/
-├── main.py                    # Main entry point
+├── main.py                    # Main entry point with section toggles
 ├── requirements.txt           # Python dependencies
 ├── .env.example              # Environment template
 ├── README.md                 # This file
 ├── scripts/
 │   ├── download_osm_pbf.py
 │   ├── import_into_postgres.py
-│   ├── add_custom_tags.py
-│   ├── write_tags_to_pbf.py
-│   └── Lua2_RouteProcessing.lua
+│   ├── add_custom_tags.py    # Orchestrates all 6 custom tag parts
+│   ├── write_tags_to_pbf_2.py # Writes augmented attributes to PBF
+│   ├── Lua3_RouteProcessing_with_curvature.lua  # OSM import Lua script
+│   └── rerun_road_classification_and_dependencies.py  # Standalone re-run script
 ├── sql/
-│   ├── road_classification/
-│   ├── road_curvature_classification/
-│   ├── road_scenery/
-│   └── road_access/
+│   ├── road_classification/   # Road classification (Part 1)
+│   ├── road_curvature_v2/     # Curvature v2 (Part 2, includes coordinate population)
+│   ├── road_scenery/          # Scenery attributes (Part 3)
+│   ├── road_access/           # Bike access (Part 4)
+│   ├── road_intersection_density/  # Intersection speed degradation v2 (Part 5)
+│   └── road_persona/          # Persona scoring (Part 6)
+├── legacy-code/               # Archived old/obsolete scripts
 ├── data/
 │   ├── GHSL_data/            # Place GHSL TIFF files here
 │   └── Population_data/      # Place population TIFF files here
 └── logs/                     # Auto-created log files
 ```
 
-## Notes
+## Important Notes
 
-- This is a simplified version focused on local execution and "new" mode only
-- All optimizations and improvements from v1 are preserved
-- File-based logging ensures logs persist even if Cursor/terminal closes
-- The pipeline is designed to be run from scratch each time (no merge mode)
+- **Import Step**: Only run `import_to_postgres` when importing a **new PBF file**. For iterative development, skip this step.
+- **Coordinate Population**: Node coordinates in `rs_highway_way_nodes` are automatically populated as part of the curvature workflow (idempotent, skips if >95% already populated).
+- **Section Toggles**: Use `PIPELINE_SECTIONS` in `main.py` to enable/disable specific sections without commenting out code.
+- **Standalone Scripts**: For re-running specific parts, use `scripts/rerun_road_classification_and_dependencies.py` or create similar scripts.
+- **Legacy Code**: Old/obsolete scripts have been moved to `legacy-code/` directory for reference.
 
 ## Large files & Git
 

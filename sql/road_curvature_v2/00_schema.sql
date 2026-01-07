@@ -45,7 +45,7 @@ CREATE UNLOGGED TABLE rs_curvature_conflict_points (
 );
 
 DROP TABLE IF EXISTS rs_curvature_way_summary;
-CREATE TABLE rs_curvature_way_summary (
+CREATE UNLOGGED TABLE rs_curvature_way_summary (
     way_id BIGINT PRIMARY KEY,
     total_length_m DOUBLE PRECISION,
     meters_sharp DOUBLE PRECISION,
