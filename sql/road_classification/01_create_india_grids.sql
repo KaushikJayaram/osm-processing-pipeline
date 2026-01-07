@@ -45,20 +45,18 @@ FROM grid;
 -- Step 3: Create spatial index on grid table for fast intersection checks
 CREATE INDEX idx_india_grids_geom ON india_grids USING GIST (grid_geom);
 
--- Step 4: Ensure spatial index exists on state boundaries
-CREATE INDEX IF NOT EXISTS idx_rs_india_bounds_geom 
-ON rs_india_bounds USING GIST (geometry)
-WHERE admin_level = '4' AND geometry IS NOT NULL;
+-- Step 4: Ensure spatial index exists on state boundaries - Not needed anymore as we are using admin_level = '2' in the where clause
+-- CREATE INDEX IF NOT EXISTS idx_rs_india_bounds_geom 
+-- ON rs_india_bounds USING GIST (geometry)
+-- WHERE admin_level = '2' AND geometry IS NOT NULL;
 
--- Step 5: Mark valid grids by iterating through each state boundary
--- This uses the spatial index on india_grids for efficient lookups
--- Complexity: O(states × log(grids)) instead of O(grids × states)
+-- Step 5: Mark valid grids by iterating through each country boundary
 UPDATE india_grids
 SET is_valid = TRUE
 WHERE EXISTS (
     SELECT 1
     FROM rs_india_bounds
-    WHERE admin_level = '4' 
+    WHERE admin_level = '2' 
       AND geometry IS NOT NULL
       AND ST_Intersects(india_grids.grid_geom, geometry)
 );

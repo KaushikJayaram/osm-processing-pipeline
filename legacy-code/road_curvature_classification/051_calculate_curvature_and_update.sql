@@ -68,16 +68,16 @@ WITH all_segments AS (
 INSERT INTO curvature_results (osm_id, segment_length, road_curvature_ratio, road_curvature_classification)
 SELECT 
     osm_id,
-    ST_Length(geom_ls::geography) as segment_length,
+    ST_Length(ST_Transform(geom_ls, 3857)) as segment_length,
     CASE 
-        WHEN ST_Length(geom_ls::geography) = 0 THEN NULL
-        ELSE ST_Distance(ST_StartPoint(geom_ls)::geography, ST_EndPoint(geom_ls)::geography) 
-             / NULLIF(ST_Length(geom_ls::geography), 0)
+        WHEN ST_Length(ST_Transform(geom_ls, 3857)) = 0 THEN NULL
+        ELSE ST_Distance(ST_Transform(ST_StartPoint(geom_ls), 3857), ST_Transform(ST_EndPoint(geom_ls), 3857)) 
+             / NULLIF(ST_Length(ST_Transform(geom_ls, 3857)), 0)
     END AS road_curvature_ratio,
     CASE 
-        WHEN ST_Length(geom_ls::geography) = 0 THEN 'straight'
-        WHEN ST_Distance(ST_StartPoint(geom_ls)::geography, ST_EndPoint(geom_ls)::geography) / NULLIF(ST_Length(geom_ls::geography), 0) > 0.9 THEN 'straight'
-        WHEN ST_Distance(ST_StartPoint(geom_ls)::geography, ST_EndPoint(geom_ls)::geography) / NULLIF(ST_Length(geom_ls::geography), 0) > 0.75 THEN 'medium'
+        WHEN ST_Length(ST_Transform(geom_ls, 3857)) = 0 THEN 'straight'
+        WHEN ST_Distance(ST_Transform(ST_StartPoint(geom_ls), 3857), ST_Transform(ST_EndPoint(geom_ls), 3857)) / NULLIF(ST_Length(ST_Transform(geom_ls, 3857)), 0) > 0.9 THEN 'straight'
+        WHEN ST_Distance(ST_Transform(ST_StartPoint(geom_ls), 3857), ST_Transform(ST_EndPoint(geom_ls), 3857)) / NULLIF(ST_Length(ST_Transform(geom_ls, 3857)), 0) > 0.75 THEN 'medium'
         ELSE 'high'
     END AS road_curvature_classification
 FROM all_segments;

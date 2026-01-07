@@ -46,6 +46,13 @@ SET final_road_classification_from_grid_overlap =
 WHERE multi_grid = TRUE
 AND bikable_road = TRUE;
 
+-- Catch-all: Assign any remaining NULL values as 'RuralWoH' (default classification)
+-- Only process bikable roads (bikable_road = true)
+UPDATE osm_all_roads
+SET final_road_classification_from_grid_overlap = 'RuralWoH'
+WHERE final_road_classification_from_grid_overlap IS NULL
+AND bikable_road = TRUE;
+
 -- Ensure classification columns exist (idempotent)
 ALTER TABLE osm_all_roads
 ADD COLUMN IF NOT EXISTS road_classification_i1 VARCHAR,
@@ -76,7 +83,7 @@ FROM (
     END AS road_setting_i1,
     CASE
       WHEN COALESCE(ref,'') ILIKE '%NH%'
-        OR (COALESCE(ref,'') NOT ILIKE '%SH%' AND COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('trunk','trunk_link'))
+        OR (COALESCE(ref,'') NOT ILIKE '%SH%' AND COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('trunk','trunk_link','motorway','motorway_link'))
         THEN 'NH'
       WHEN COALESCE(ref,'') ILIKE '%SH%'
         OR (COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('primary','primary_link'))
@@ -85,8 +92,6 @@ FROM (
         OR highway IN ('secondary','secondary_link')
         THEN 'MDR'
       WHEN highway IN (
-        'motorway','motorway_link',
-        'trunk','trunk_link',
         'primary','primary_link',
         'secondary','secondary_link'
       )
@@ -109,7 +114,7 @@ FROM (
       ||
       CASE
         WHEN COALESCE(ref,'') ILIKE '%NH%'
-          OR (COALESCE(ref,'') NOT ILIKE '%SH%' AND COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('trunk','trunk_link'))
+          OR (COALESCE(ref,'') NOT ILIKE '%SH%' AND COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('trunk','trunk_link','motorway','motorway_link'))
           THEN 'NH'
         WHEN COALESCE(ref,'') ILIKE '%SH%'
           OR (COALESCE(ref,'') NOT ILIKE '%MDR%' AND highway IN ('primary','primary_link'))
@@ -118,8 +123,6 @@ FROM (
           OR highway IN ('secondary','secondary_link')
           THEN 'MDR'
         WHEN highway IN (
-          'motorway','motorway_link',
-          'trunk','trunk_link',
           'primary','primary_link',
           'secondary','secondary_link'
         )

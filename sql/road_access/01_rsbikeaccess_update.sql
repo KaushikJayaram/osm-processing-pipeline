@@ -16,11 +16,23 @@ END $$;
 -- Step 2: Add the column 'rsbikeaccess' to the table with a default value of 'yes'
 ALTER TABLE osm_all_roads ADD COLUMN IF NOT EXISTS rsbikeaccess VARCHAR(3) DEFAULT 'yes';
 
+-- Performance: ensure osm_id is indexed for the large IN(...) update below
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE tablename = 'osm_all_roads'
+          AND indexname = 'idx_osm_all_roads_osm_id'
+    ) THEN
+        CREATE INDEX idx_osm_all_roads_osm_id ON osm_all_roads (osm_id);
+    END IF;
+END $$;
+
 -- Step 3: Update the 'rsbikeaccess' column to 'no' for the specified way_ids
 -- Example input OSM way IDs
 UPDATE osm_all_roads
 SET rsbikeaccess = 'no'
-WHERE way_id IN (
+WHERE osm_id IN (
     72002980,
 584645795,
 492987362,

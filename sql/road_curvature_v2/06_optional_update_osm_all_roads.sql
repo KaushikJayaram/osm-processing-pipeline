@@ -47,6 +47,14 @@ SET
     meters_broad = s.meters_broad,
     meters_straight = s.meters_straight
 FROM rs_curvature_way_summary AS s
-WHERE o.osm_id = s.way_id;
+WHERE o.osm_id = s.way_id
+  -- Only update rows where values actually changed (avoids unnecessary writes)
+  AND (
+      o.twistiness_score IS DISTINCT FROM s.twistiness_score
+      OR o.twistiness_class IS DISTINCT FROM s.twistiness_class
+      OR o.meters_sharp IS DISTINCT FROM s.meters_sharp
+      OR o.meters_broad IS DISTINCT FROM s.meters_broad
+      OR o.meters_straight IS DISTINCT FROM s.meters_straight
+  );
 
 

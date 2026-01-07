@@ -1,5 +1,13 @@
 -- Curvature v2: lightweight validation / sanity queries.
 
+-- 0) Check coordinate population status (prerequisite check)
+SELECT
+    COUNT(*) AS total_way_nodes,
+    COUNT(*) FILTER (WHERE lon IS NOT NULL AND lat IS NOT NULL) AS nodes_with_coords,
+    COUNT(*) FILTER (WHERE lon IS NULL OR lat IS NULL) AS nodes_without_coords,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE lon IS NOT NULL AND lat IS NOT NULL) / NULLIF(COUNT(*), 0), 1) AS pct_with_coords
+FROM rs_highway_way_nodes;
+
 -- 1) Count output rows
 SELECT
     COUNT(*) AS ways_scored,
@@ -35,5 +43,6 @@ JOIN osm_all_roads AS o ON o.osm_id = s.way_id
 WHERE s.total_length_m > 500 -- ignore tiny segments
 ORDER BY s.twistiness_score DESC
 LIMIT 50;
+
 
 
