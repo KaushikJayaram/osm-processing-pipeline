@@ -1,43 +1,20 @@
-
-## 2. Optimized `write_tags_to_pbf.py` implementation
 #!/usr/bin/env python3
 
 import os
 import sys
 from typing import Dict, Any
-from datetime import datetime
 import logging
 
 import psycopg
 import osmium as osm
 
-# Setup logging to both console and file
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Create logs directory if it doesn't exist
-    log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # Create log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"write_tags_to_pbf_{timestamp}.log")
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
-            logging.StreamHandler()  # Also print to console
-        ]
-    )
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized. Log file: {log_file}")
-    return logger, log_file
+try:
+    from .utils import setup_logging
+except ImportError:
+    from utils import setup_logging
 
-# Initialize logger at module level
-logger, log_file = setup_logging()
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 def log_print(message, level='info'):
     """Print to console and log to file."""
@@ -74,20 +51,12 @@ TAG_FIELDS = [
     
     # Scenery
     "road_scenery_urban",
-    "road_scenery_semiurban",
-    "road_scenery_rural",
     "road_scenery_forest",
     "road_scenery_hill",
     "road_scenery_lake",
     "road_scenery_beach",
     "road_scenery_river",
-    "road_scenery_desert",
     "road_scenery_field",
-    "road_scenery_saltflat",
-    "road_scenery_mountainpass",
-    "road_scenery_snowcappedmountain",
-    "road_scenery_plantation",
-    "road_scenery_backwater",
     
     # Access and environment
     "rsbikeaccess",
@@ -263,3 +232,8 @@ def write_tags_to_pbf(db_config, output_pbf_path):
         writer.close()
 
     log_print("[write_tags_to_pbf] PBF augmentation completed. Updated OSM file saved.")
+
+if __name__ == "__main__":
+    setup_logging()
+    # Logic to parse args if run directly would go here
+    logger.info("Script run directly")

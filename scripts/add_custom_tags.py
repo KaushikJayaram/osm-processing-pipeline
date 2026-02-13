@@ -10,60 +10,13 @@ from datetime import datetime
 import gc
 import psutil
 
-# ============================================================================
-# PATH RESOLUTION
-# ============================================================================
+try:
+    from .utils import setup_logging, resolve_project_path
+except ImportError:
+    from utils import setup_logging, resolve_project_path
 
-def get_project_base_dir():
-    """Get the base directory (osm-file-processing-v2) - one level up from scripts/."""
-    # Get the directory where this script is located (scripts/)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Go up one level to get osm-file-processing-v2/
-    base_dir = os.path.dirname(script_dir)
-    return base_dir
-
-def resolve_project_path(path):
-    """Resolve a path relative to the project base directory."""
-    base_dir = get_project_base_dir()
-    
-    # If path is already absolute, return as-is
-    if os.path.isabs(path):
-        return path
-    
-    # If path starts with ./, remove it
-    if path.startswith('./'):
-        path = path[2:]
-    
-    # Join with base directory
-    return os.path.join(base_dir, path)
-
-# Setup logging to both console and file
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Create logs directory if it doesn't exist (relative to project root)
-    log_dir = resolve_project_path("logs")
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # Create log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"add_custom_tags_{timestamp}.log")
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
-            logging.StreamHandler()  # Also print to console
-        ]
-    )
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized. Log file: {log_file}")
-    return logger, log_file
-
-# Initialize logger at module level
-logger, log_file = setup_logging()
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 def log_print(message, level='info'):
     """Print to console and log to file."""
@@ -131,11 +84,11 @@ def load_raster_data(db_config):
 
     raster_files = [
         {
-            "filepath": resolve_project_path("data/Population_data/ind_pd_2020_1km_UNadj.tif"),
+            "filepath": resolve_project_path(""),
             "table": "public.pop_density"
         },
         {
-            "filepath": resolve_project_path("data/GHSL_data/GHS_BUILT_S_E2030_GLOBE_R2023A_4326_30ss_V1_0.tif"),
+            "filepath": resolve_project_path("data/GHSL_data/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.tif"),
             "table": "public.built_up_area"
         }
     ]
@@ -338,7 +291,7 @@ def add_custom_tags(db_config):
     """Executes raster loading first, then SQL scripts in four parts."""
     message = "[add_custom_tags] Starting custom tag processing..."
     log_print(message)
-    log_print(f"Log file location: {log_file}")
+    # log_print(f"Log file location: {log_file}") # log_file not available in scope if imported
 
     overall_start_time = time.time()
 
@@ -460,9 +413,7 @@ def add_custom_tags(db_config):
         "05_scenery_lake.sql",
         "06_scenery_beach.sql",
         "07_scenery_river.sql",
-        "08_scenery_desert.sql",
-        "09_scenery_field.sql",
-        "11_scenery_mountain_pass.sql",
+        "08_scenery_field.sql",
     ]
 
     for sql_file in road_scenery_sql_files:
@@ -578,5 +529,9 @@ def add_custom_tags(db_config):
     log_time("SQL script execution", overall_start_time)
     message = "[add_custom_tags] Completed all processing steps."
     log_print(message)
-    log_print(f"Full log saved to: {log_file}")
+    # log_print(f"Full log saved to: {log_file}") # skipped as log_file not available
 
+if __name__ == "__main__":
+    setup_logging()
+    # No direct execution logic here unless this script is meant to be run standalone with args
+    logger.info("Script run directly")

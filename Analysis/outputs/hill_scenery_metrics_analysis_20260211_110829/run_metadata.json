@@ -1,0 +1,13 @@
+{
+  "timestamp": "20260211_110829",
+  "output_dir": "/Users/kaushikjayaram/RideSense/Codebase/LocationIntelligence/osm-processing-pipeline/Analysis/outputs/hill_scenery_metrics_analysis_20260211_110829",
+  "log_file": "/Users/kaushikjayaram/RideSense/Codebase/LocationIntelligence/osm-processing-pipeline/logs/hill_scenery_metrics_analysis_20260211_110829.log",
+  "row_count": 10366065,
+  "bbox": {
+    "lat_min": 6.5,
+    "lat_max": 35.5,
+    "lon_min": 68.0,
+    "lon_max": 97.5
+  },
+  "where": null
+}

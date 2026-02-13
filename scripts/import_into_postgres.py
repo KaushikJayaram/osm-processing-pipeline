@@ -6,33 +6,13 @@ import subprocess
 from datetime import datetime
 import logging
 
-# Setup logging to both console and file
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Create logs directory if it doesn't exist
-    log_dir = "logs"
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # Create log filename with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"import_into_postgres_{timestamp}.log")
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
-            logging.StreamHandler()  # Also print to console
-        ]
-    )
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized. Log file: {log_file}")
-    return logger, log_file
+try:
+    from .utils import setup_logging
+except ImportError:
+    from utils import setup_logging
 
-# Initialize logger at module level
-logger, log_file = setup_logging()
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 def log_print(message, level='info'):
     """Print to console and log to file."""
@@ -207,3 +187,8 @@ def import_into_postgres(pbf_file, db_config, style_lua_script):
     else:
         log_print(f"[import_into_postgres] WARNING: Validation script not found at {validation_script}. Skipping validation.", level='warning')
         log_print("[import_into_postgres] WARNING: Proceeding without validation - this is risky!", level='warning')
+
+if __name__ == "__main__":
+    setup_logging()
+    # If there was a main block logic to import, it would go here.
+    # But checking previous file, it didn't seem to have a main execution block other than initializing logger.

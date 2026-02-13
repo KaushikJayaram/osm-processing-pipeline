@@ -10,7 +10,10 @@ logs/
 *.log
 
 # Data (user-provided)
-data/GHSL_data/*.tif
+data/GHSL_data/
+data/Worldcover_data/
+data/DEM_data/
+
 data/Population_data/*.tif
 data/*.csv
 data/**/*.pdf

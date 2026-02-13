@@ -13,13 +13,7 @@ SET
     road_scenery_lake = 0,
     road_scenery_beach = 0,
     road_scenery_river = 0,
-    road_scenery_desert = 0,
     road_scenery_field = 0,
-    road_scenery_mountainpass = 0,
-    road_scenery_saltflat = 0,
-    road_scenery_snowcappedmountain = 0,
-    road_scenery_plantation = 0,
-    road_scenery_backwater = 0
 WHERE road_scenery_urban = 0 
 AND road_scenery_semiurban = 0;
 

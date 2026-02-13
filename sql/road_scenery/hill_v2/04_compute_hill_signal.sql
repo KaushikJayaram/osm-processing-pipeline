@@ -1,0 +1,3 @@
+-- Hill signal step (relief-only pipeline)
+-- Relief raster is already smoothed offline; no DB smoothing is required.
+-- This step is intentionally a no-op to keep pipeline sequencing consistent.

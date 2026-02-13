@@ -9,6 +9,7 @@ import psutil
 from datetime import datetime
 from dotenv import load_dotenv
 
+from scripts.utils import setup_logging
 from scripts.write_tags_to_pbf_2 import write_tags_to_pbf as write_tags_to_pbf_2
 from scripts.download_osm_pbf import download_osm_pbf
 from scripts.import_into_postgres import import_into_postgres
@@ -90,29 +91,8 @@ if missing_vars:
 # LOGGING SETUP
 # ============================================================================
 
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Resolve log directory relative to script location
-    log_dir = resolve_path("logs", BASE_DIR)
-    os.makedirs(log_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = os.path.join(log_dir, f"main_pipeline_{timestamp}.log")
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file, mode='a', encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging initialized. Log file: {log_file}")
-    return logger, log_file
-
-logger, log_file = setup_logging()
+log_file = setup_logging("main_pipeline")
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # PIPELINE FUNCTIONS
