@@ -1,0 +1,11 @@
+osm_id,name,road_type_i1,score_urban_gate,score_cruise_road,score_offroad,score_calm_road,score_flow,score_remoteness,score_twist,score_scenic,persona_milemuncher_score,persona_cornercraver_score,persona_trailblazer_score,persona_tranquiltraveller_score,persona
+1150133588,,Res,1.0,0.16,0.8,0.3,1.0,0.9985,1.0,1.0,0.0936,0.9759,0.5997,0.2549,cornercraver
+819310673,,Res,1.0,0.16,0.8,0.3,1.0,0.999,1.0,1.0,0.0936,0.9759,0.5998,0.2549,cornercraver
+815190587,,Res,1.0,0.16,0.8,0.3,1.0,0.9982,1.0,1.0,0.0936,0.9758,0.5997,0.2549,cornercraver
+809028116,,Res,1.0,0.16,0.8,0.3,1.0,0.9978,1.0,1.0,0.0936,0.9758,0.5996,0.2549,cornercraver
+1444155832,,Res,1.0,0.16,0.8,0.3,1.0,0.9979,1.0,1.0,0.0936,0.9758,0.5996,0.2549,cornercraver
+816370129,,Res,1.0,0.16,0.8,0.3,1.0,0.9983,1.0,1.0,0.0936,0.9758,0.5997,0.2549,cornercraver
+809419100,,Res,1.0,0.16,0.8,0.3,1.0,0.9977,1.0,1.0,0.0936,0.9758,0.5996,0.2549,cornercraver
+815190585,,Res,1.0,0.16,0.8,0.3,1.0,0.9982,1.0,1.0,0.0936,0.9758,0.5997,0.2549,cornercraver
+1434979773,,Res,1.0,0.16,0.8,0.3,1.0,0.9969,1.0,1.0,0.0936,0.9757,0.5994,0.2548,cornercraver
+803548266,,Res,1.0,0.16,0.8,0.3,1.0,0.997,1.0,1.0,0.0936,0.9757,0.5995,0.2548,cornercraver

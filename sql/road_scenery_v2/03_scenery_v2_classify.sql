@@ -1,42 +1,49 @@
 -- 03_scenery_v2_classify.sql
 -- Classifies scenery tags based on WorldCover fractions.
+-- Chunked execution using grid_id ranges.
 
 BEGIN;
 
--- 1. Reset existing Scenery V2 tags for rows that will be re-processed
--- This ensures clean state if running multiple times.
--- We only touch rows where scenery_v2_source is 'worldcover_2020_50m' OR NULL.
-UPDATE osm_all_roads
+-- 1. Reset existing Scenery V2 tags for rows in current chunk
+-- Only reset rows that have wc_total_px > 0 (i.e., were processed in sampling step)
+UPDATE osm_all_roads r
 SET 
-    scenery_v2_primary = NULL,
+    road_scenery_primary = NULL,
     scenery_v2_forest = FALSE,
     scenery_v2_field = FALSE,
     scenery_v2_desert = FALSE,
     scenery_v2_snow = FALSE,
     scenery_v2_water = FALSE,
-    scenery_v2_confidence = NULL
-WHERE scenery_v2_source = 'worldcover_2020_50m' OR scenery_v2_source IS NULL;
+    scenery_v2_confidence = NULL,
+    road_scenery_forest = 0,
+    road_scenery_field = 0
+FROM public.osm_all_roads_grid rg
+WHERE r.osm_id = rg.osm_id
+  AND rg.grid_id BETWEEN :grid_id_min AND :grid_id_max
+  AND r.wc_total_px > 0;
 
--- 2. Compute classification
--- We ignore roads that are already Urban or Semi-urban
+-- 2. Compute classification for current chunk
 WITH classification_data AS (
     SELECT 
-        osm_id,
-        wc_forest_frac,
-        wc_field_frac,
-        wc_desert_frac,
-        wc_snow_frac,
-        wc_water_frac,
+        r.osm_id,
+        r.wc_forest_frac,
+        r.wc_field_frac,
+        r.wc_desert_frac,
+        r.wc_snow_frac,
+        r.wc_water_frac,
         -- Determine max fraction
         GREATEST(
-            COALESCE(wc_forest_frac, 0),
-            COALESCE(wc_field_frac, 0),
-            COALESCE(wc_desert_frac, 0),
-            COALESCE(wc_snow_frac, 0),
-            COALESCE(wc_water_frac, 0)
+            COALESCE(r.wc_forest_frac, 0),
+            COALESCE(r.wc_field_frac, 0),
+            COALESCE(r.wc_desert_frac, 0),
+            COALESCE(r.wc_snow_frac, 0),
+            COALESCE(r.wc_water_frac, 0)
         ) as max_frac
-    FROM osm_all_roads
-    WHERE wc_total_px > 0
+    FROM osm_all_roads r
+    JOIN public.osm_all_roads_grid rg
+      ON rg.osm_id = r.osm_id
+    WHERE rg.grid_id BETWEEN :grid_id_min AND :grid_id_max
+      AND r.wc_total_px > 0
 ),
 primary_determination AS (
     SELECT 
@@ -50,20 +57,26 @@ primary_determination AS (
             WHEN max_frac = COALESCE(wc_snow_frac, 0) THEN 'snow'
             WHEN max_frac = COALESCE(wc_water_frac, 0) THEN 'water'
             ELSE NULL
-        END as primary_class
+        END as primary_class,
+        wc_forest_frac,
+        wc_field_frac,
+        wc_desert_frac,
+        wc_snow_frac,
+        wc_water_frac
     FROM classification_data
 )
 UPDATE osm_all_roads r
 SET 
     scenery_v2_confidence = pd.max_frac,
-    scenery_v2_primary = pd.primary_class,
-    -- Set booleans based on 0.20 threshold
+    road_scenery_primary = pd.primary_class,
+    -- Set booleans based on 0.35 threshold
     scenery_v2_forest = (r.wc_forest_frac >= 0.35),
     scenery_v2_field = (r.wc_field_frac >= 0.35),
     scenery_v2_desert = (r.wc_desert_frac >= 0.35),
     scenery_v2_snow = (r.wc_snow_frac >= 0.35),
     scenery_v2_water = (r.wc_water_frac >= 0.35),
-    scenery_v2_source = 'worldcover_2020_50m'
+    road_scenery_forest = CASE WHEN r.wc_forest_frac >= 0.35 THEN 1 ELSE 0 END,
+    road_scenery_field = CASE WHEN r.wc_field_frac >= 0.35 THEN 1 ELSE 0 END
 FROM primary_determination pd
 WHERE r.osm_id = pd.osm_id;
 

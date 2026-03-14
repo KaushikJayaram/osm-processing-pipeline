@@ -110,41 +110,23 @@ factors AS (
                 COALESCE(o.road_scenery_hill, 0) +
                 COALESCE(o.road_scenery_lake, 0) +
                 COALESCE(o.road_scenery_river, 0) +
-                COALESCE(o.road_scenery_mountainpass, 0) +
                 COALESCE(o.road_scenery_field, 0) +
-                COALESCE(o.road_scenery_beach, 0) +
-                COALESCE(o.road_scenery_desert, 0) +
-                COALESCE(o.road_scenery_saltflat, 0) +
-                COALESCE(o.road_scenery_snowcappedmountain, 0) +
-                COALESCE(o.road_scenery_plantation, 0) +
-                COALESCE(o.road_scenery_backwater, 0)
+                COALESCE(o.road_scenery_beach, 0)
             ) >= 2 THEN LEAST(1.0, (
                 COALESCE(o.road_scenery_forest, 0) +
                 COALESCE(o.road_scenery_hill, 0) +
                 COALESCE(o.road_scenery_lake, 0) +
                 COALESCE(o.road_scenery_river, 0) +
-                COALESCE(o.road_scenery_mountainpass, 0) +
                 COALESCE(o.road_scenery_field, 0) +
-                COALESCE(o.road_scenery_beach, 0) +
-                COALESCE(o.road_scenery_desert, 0) +
-                COALESCE(o.road_scenery_saltflat, 0) +
-                COALESCE(o.road_scenery_snowcappedmountain, 0) +
-                COALESCE(o.road_scenery_plantation, 0) +
-                COALESCE(o.road_scenery_backwater, 0)
+                COALESCE(o.road_scenery_beach, 0)
             ) / 3.0)  -- 3+ flags = max score
             WHEN (
                 COALESCE(o.road_scenery_forest, 0) +
                 COALESCE(o.road_scenery_hill, 0) +
                 COALESCE(o.road_scenery_lake, 0) +
                 COALESCE(o.road_scenery_river, 0) +
-                COALESCE(o.road_scenery_mountainpass, 0) +
                 COALESCE(o.road_scenery_field, 0) +
-                COALESCE(o.road_scenery_beach, 0) +
-                COALESCE(o.road_scenery_desert, 0) +
-                COALESCE(o.road_scenery_saltflat, 0) +
-                COALESCE(o.road_scenery_snowcappedmountain, 0) +
-                COALESCE(o.road_scenery_plantation, 0) +
-                COALESCE(o.road_scenery_backwater, 0)
+                COALESCE(o.road_scenery_beach, 0)
             ) = 1 THEN 0.3  -- Single flag = low score
             ELSE 0.0  -- No scenery = 0
         END AS scenery,

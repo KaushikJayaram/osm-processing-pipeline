@@ -9,7 +9,6 @@ ALTER TABLE public.india_grids
     ADD COLUMN IF NOT EXISTS built_up_fraction numeric,
     ADD COLUMN IF NOT EXISTS urban_pressure numeric,
     ADD COLUMN IF NOT EXISTS reinforced_pressure numeric,
-    ADD COLUMN IF NOT EXISTS urban_class text,
     ADD COLUMN IF NOT EXISTS pd_norm numeric,
     ADD COLUMN IF NOT EXISTS bu_norm numeric;
 

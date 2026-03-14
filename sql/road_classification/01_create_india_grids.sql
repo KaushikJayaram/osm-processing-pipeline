@@ -61,6 +61,30 @@ WHERE EXISTS (
       AND ST_Intersects(india_grids.grid_geom, geometry)
 );
 
+-- Step 5a: If not already valid, allow admin_level 4 to qualify grids
+UPDATE india_grids
+SET is_valid = TRUE
+WHERE is_valid = FALSE
+  AND EXISTS (
+    SELECT 1
+    FROM rs_india_bounds
+    WHERE admin_level = '4'
+      AND geometry IS NOT NULL
+      AND ST_Intersects(india_grids.grid_geom, geometry)
+  );
+
+-- Step 5b: If not already valid, allow admin_level 5 to qualify grids
+UPDATE india_grids
+SET is_valid = TRUE
+WHERE is_valid = FALSE
+  AND EXISTS (
+    SELECT 1
+    FROM rs_india_bounds
+    WHERE admin_level = '5'
+      AND geometry IS NOT NULL
+      AND ST_Intersects(india_grids.grid_geom, geometry)
+  );
+
 -- Step 6: Delete invalid grids (those that don't intersect any state boundary)
 DELETE FROM india_grids WHERE is_valid = FALSE;
 

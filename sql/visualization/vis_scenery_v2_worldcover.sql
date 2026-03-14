@@ -19,7 +19,7 @@ SELECT
   wc_desert_frac,
   wc_snow_frac,
   wc_water_frac,
-  scenery_v2_primary,
+  road_scenery_primary,
   scenery_v2_confidence
 FROM public.osm_all_roads
 WHERE wc_total_px IS NOT NULL
@@ -40,7 +40,7 @@ DROP MATERIALIZED VIEW IF EXISTS vis.map_scenery_v2_worldcover_z10;
 CREATE MATERIALIZED VIEW vis.map_scenery_v2_worldcover_z10 AS
 SELECT
   osm_id,
-  scenery_v2_primary AS class_label,
+  road_scenery_primary AS class_label,
   wc_forest_frac,
   wc_field_frac,
   wc_desert_frac,

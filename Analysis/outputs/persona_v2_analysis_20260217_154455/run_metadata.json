@@ -1,0 +1,31 @@
+{
+  "timestamp": "20260217_154455",
+  "output_dir": "/Users/kaushikjayaram/RideSense/Codebase/LocationIntelligence/osm-processing-pipeline/Analysis/outputs/persona_v2_analysis_20260217_154455",
+  "log_file": "/Users/kaushikjayaram/RideSense/Codebase/LocationIntelligence/osm-processing-pipeline/logs/persona_v2_analysis_20260217_154455.log",
+  "row_count": 647322,
+  "bbox": {
+    "lat_min": 12.0,
+    "lat_max": 15.0,
+    "lon_min": 75.0,
+    "lon_max": 79.0
+  },
+  "where": null,
+  "parameter_scores": [
+    "score_urban_gate",
+    "score_cruise_road",
+    "score_offroad",
+    "score_calm_road",
+    "score_flow",
+    "score_remoteness",
+    "score_twist",
+    "score_scenic"
+  ],
+  "persona_scores": [
+    "persona_milemuncher_score",
+    "persona_cornercraver_score",
+    "persona_trailblazer_score",
+    "persona_tranquiltraveller_score"
+  ],
+  "urban_gate_validation": {
+    "urban_roads_count": 176883,
+    "mm_violations": 

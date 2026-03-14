@@ -124,7 +124,9 @@ SELECT
         COALESCE(road_scenery_forest, 0) +
         COALESCE(road_scenery_hill, 0) +
         COALESCE(road_scenery_lake, 0) +
-        COALESCE(road_scenery_river, 0)
+        COALESCE(road_scenery_river, 0) +
+        COALESCE(road_scenery_field, 0) +
+        COALESCE(road_scenery_beach, 0)
     ) AS scenery_flags
 FROM osm_all_roads
 WHERE bikable_road = TRUE
@@ -147,7 +149,9 @@ SELECT
         COALESCE(road_scenery_forest, 0) +
         COALESCE(road_scenery_hill, 0) +
         COALESCE(road_scenery_lake, 0) +
-        COALESCE(road_scenery_river, 0)
+        COALESCE(road_scenery_river, 0) +
+        COALESCE(road_scenery_field, 0) +
+        COALESCE(road_scenery_beach, 0)
     ) AS scenery_flags
 FROM osm_all_roads
 WHERE bikable_road = TRUE

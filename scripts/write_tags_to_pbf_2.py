@@ -41,13 +41,16 @@ TAG_FIELDS = [
     # Curvature (legacy - from old pipeline)
     "road_curvature_classification",
     "road_curvature_ratio",
+
+    #Lanes
+    "fourlane",
     
     # Curvature v2 (new pipeline - from sql/road_curvature_v2/)
     "twistiness_score",
-    "twistiness_class",
-    "meters_sharp",
-    "meters_broad",
-    "meters_straight",
+    #"twistiness_class",
+    #"meters_sharp",
+    #"meters_broad",
+    #"meters_straight",
     
     # Scenery
     "road_scenery_urban",
@@ -62,17 +65,24 @@ TAG_FIELDS = [
     "rsbikeaccess",
     "build_perc",
     "population_density",
+    "pop_density_normalized",
+    "urban_pressure",
+    "reinforced_pressure",
     
     # Intersection speed degradation (v2 - new approach)
-    "intersection_speed_degradation_base",  # Base degradation value (0.0-0.5, before setting/lanes factors)
-    "intersection_speed_degradation_setting_adjusted",  # Degradation value (0.0-0.5, after setting multiplier applied)
+    #"intersection_speed_degradation_base",  # Base degradation value (0.0-0.5, before setting/lanes factors)
+    #"intersection_speed_degradation_setting_adjusted",  # Degradation value (0.0-0.5, after setting multiplier applied)
     "intersection_speed_degradation_final",  # MULTIPLIER (0.5-1.0) - ready for GraphHopper multiply_by operations
-    
-    # Persona scores (simplified framework - Phase 1)
-    "persona_milemuncher_base_score",  # MileMuncher persona score (0-100)
-    "persona_cornercraver_base_score",  # CornerCraver persona score (0-100)
-    "persona_trailblazer_base_score",  # TrailBlazer persona score (0-100)
-    "persona_tranquiltraveller_base_score",  # TranquilTraveller persona score (0-100)
+
+    # Persona V2 scores (normalized, 0-1)
+    "persona_milemuncher_score_normalised",  # MileMuncher (normalized, 0-1)
+    "persona_cornercraver_score_normalised",  # CornerCraver (normalized, 0-1)
+    "persona_trailblazer_score_normalised",  # TrailBlazer (normalized, 0-1)
+    "persona_tranquiltraveller_score_normalised",  # TranquilTraveller (normalized, 0-1)
+]
+
+TAG_FIELDS_MINIMAL = [
+    "rsbikeaccess",
 ]
 
 

@@ -85,6 +85,7 @@ node_way_hierarchies AS (
             WHEN o.road_type_i1 = 'WoH' THEN 3
             WHEN o.road_type_i1 = 'Track' THEN 2
             WHEN o.road_type_i1 = 'Path' THEN 1
+            WHEN o.road_type_i1 = 'Res' THEN 1
             ELSE 0
         END AS hierarchy
     FROM intersection_nodes n
@@ -92,7 +93,7 @@ node_way_hierarchies AS (
     JOIN osm_all_roads o ON w.way_id = o.osm_id
     WHERE o.bikable_road = TRUE
       AND o.road_type_i1 IS NOT NULL
-      AND o.road_type_i1 IN ('NH', 'SH', 'MDR', 'OH', 'HAdj', 'WoH', 'Track', 'Path')
+      AND o.road_type_i1 IN ('NH', 'SH', 'MDR', 'OH', 'HAdj', 'WoH', 'Track', 'Path', 'Res')
       -- TEST BBOX FILTER: Commented out to process all of India
       -- AND ST_Intersects(o.geometry, ST_SetSRID(ST_MakeEnvelope(76.0, 12.0, 78.0, 14.0, 4326), 4326))
 ),
@@ -126,10 +127,10 @@ SELECT
          AND top_type_2 IN ('NH', 'SH', 'MDR', 'OH') THEN 'major'
         -- Middling: One road in Set A, one in Set B
         WHEN top_type_1 IN ('NH', 'SH', 'MDR', 'OH') 
-         AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track') THEN 'middling'
+         AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res') THEN 'middling'
         -- Minor: Both roads in Set B (HAdj, WoH, Path, Track)
-        WHEN top_type_1 IN ('HAdj', 'WoH', 'Path', 'Track') 
-         AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track') THEN 'minor'
+        WHEN top_type_1 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res') 
+         AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res') THEN 'minor'
         ELSE 'unknown'
     END AS intersection_type,
     top_type_1,
@@ -141,9 +142,9 @@ WHERE top_type_1 IS NOT NULL AND top_type_2 IS NOT NULL
       (top_type_1 IN ('NH', 'SH', 'MDR', 'OH') AND top_type_2 IN ('NH', 'SH', 'MDR', 'OH'))
       OR
       -- Middling
-      (top_type_1 IN ('NH', 'SH', 'MDR', 'OH') AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track'))
+      (top_type_1 IN ('NH', 'SH', 'MDR', 'OH') AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res'))
       OR
       -- Minor
-      (top_type_1 IN ('HAdj', 'WoH', 'Path', 'Track') AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track'))
+      (top_type_1 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res') AND top_type_2 IN ('HAdj', 'WoH', 'Path', 'Track', 'Res'))
   );
 

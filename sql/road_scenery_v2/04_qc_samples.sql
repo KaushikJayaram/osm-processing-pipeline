@@ -7,7 +7,7 @@
 
 SELECT 
     osm_id, 
-    scenery_v2_primary, 
+    road_scenery_primary, 
     scenery_v2_confidence,
     road_scenery_urban,
     road_scenery_semiurban,
@@ -27,7 +27,7 @@ LIMIT 25;
 
 SELECT 
     osm_id, 
-    scenery_v2_primary, 
+    road_scenery_primary, 
     scenery_v2_confidence, 
     wc_forest_frac, 
     wc_field_frac, 
@@ -43,9 +43,9 @@ LIMIT 25;
 \echo 'Sample 3: High Confidence Forest'
 \echo '----------------------------------------------------------------------'
 
-SELECT osm_id, scenery_v2_primary, wc_forest_frac
+SELECT osm_id, road_scenery_primary, wc_forest_frac
 FROM osm_all_roads
-WHERE scenery_v2_primary = 'forest' AND scenery_v2_confidence > 0.8
+WHERE road_scenery_primary = 'forest' AND scenery_v2_confidence > 0.8
 LIMIT 10;
 
 \echo '----------------------------------------------------------------------'
@@ -53,9 +53,9 @@ LIMIT 10;
 \echo '----------------------------------------------------------------------'
 
 SELECT 
-    scenery_v2_primary, 
+    road_scenery_primary, 
     COUNT(*) as count,
     AVG(scenery_v2_confidence)::NUMERIC(10,2) as avg_conf
 FROM osm_all_roads
-WHERE scenery_v2_source = 'worldcover_2020_50m'
-GROUP BY scenery_v2_primary;
+WHERE wc_total_px > 0
+GROUP BY road_scenery_primary;

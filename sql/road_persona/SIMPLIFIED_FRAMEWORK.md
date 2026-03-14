@@ -113,8 +113,8 @@ scenery = LEAST(1.0, (
     COALESCE(road_scenery_hill, 0) +
     COALESCE(road_scenery_lake, 0) +
     COALESCE(road_scenery_river, 0) +
-    COALESCE(road_scenery_mountainpass, 0) +
-    COALESCE(road_scenery_field, 0)
+    COALESCE(road_scenery_field, 0) +
+    COALESCE(road_scenery_beach, 0)
 ) / 3.0)  -- 3+ flags = max score
 ```
 

@@ -43,8 +43,8 @@ BEGIN
     END IF;
 
     -- 3. Add Scenery V2 Classification Columns
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='osm_all_roads' AND column_name='scenery_v2_primary') THEN
-        ALTER TABLE osm_all_roads ADD COLUMN scenery_v2_primary TEXT;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='osm_all_roads' AND column_name='road_scenery_primary') THEN
+        ALTER TABLE osm_all_roads ADD COLUMN road_scenery_primary TEXT;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='osm_all_roads' AND column_name='scenery_v2_forest') THEN
         ALTER TABLE osm_all_roads ADD COLUMN scenery_v2_forest BOOLEAN DEFAULT FALSE;

@@ -1,0 +1,11 @@
+osm_id,name,road_type_i1,score_urban_gate,score_cruise_road,score_offroad,score_calm_road,score_flow,score_remoteness,score_twist,score_scenic,persona_milemuncher_score,persona_cornercraver_score,persona_trailblazer_score,persona_tranquiltraveller_score,persona
+77770452,Pulivendula-Tadipatri Road,MDR,1.0,0.72,0.3,1.0,1.0,0.9965,0.0,1.0,0.6483,0.0,0.2248,0.9993,tranquiltraveller
+329831837,Bagamandala -Panathur-Kanhangad Road,MDR,1.0,0.72,0.3,1.0,1.0,0.9959,0.0,1.0,0.6483,0.0,0.2247,0.9992,tranquiltraveller
+1427476922,,MDR,1.0,0.72,0.3,1.0,1.0,0.9958,0.0,1.0,0.6483,0.0,0.2247,0.9992,tranquiltraveller
+1442795289,,MDR,1.0,0.72,0.3,1.0,1.0,0.9957,0.0,1.0,0.6483,0.0,0.2247,0.9991,tranquiltraveller
+232888530,,MDR,1.0,0.72,0.3,1.0,1.0,0.9952,0.0,1.0,0.6483,0.0,0.2247,0.999,tranquiltraveller
+232888528,,MDR,1.0,0.72,0.3,1.0,1.0,0.9952,0.0,1.0,0.6483,0.0,0.2247,0.999,tranquiltraveller
+385832935,,MDR,1.0,0.72,0.3,1.0,1.0,0.9941,0.0,1.0,0.6484,0.0,0.2246,0.9988,tranquiltraveller
+146628068,,MDR,1.0,0.72,0.3,1.0,1.0,0.9928,0.0,1.0,0.6485,0.0,0.2245,0.9986,tranquiltraveller
+306457101,,MDR,1.0,0.72,0.3,1.0,1.0,0.9924,0.0,1.0,0.6485,0.0,0.2245,0.9985,tranquiltraveller
+1270845095,Proddatur - Duvvuru Road,MDR,1.0,0.72,0.3,1.0,1.0,0.9918,0.0,1.0,0.6486,0.0,0.2244,0.9984,tranquiltraveller

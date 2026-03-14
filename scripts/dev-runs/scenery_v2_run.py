@@ -174,42 +174,93 @@ def resolve_bbox(args):
 
 
 def create_roads_grid_mapping(conn, base_params):
-    logger.info("Creating osm_all_roads_grid mapping table...")
     with conn.cursor() as cursor:
-        cursor.execute("DROP TABLE IF EXISTS public.osm_all_roads_grid;")
-        cursor.execute(
-            """
-            CREATE UNLOGGED TABLE public.osm_all_roads_grid AS
-            SELECT
-                r.osm_id,
-                g.grid_id
-            FROM osm_all_roads r
-            JOIN LATERAL (
-                SELECT g.grid_id
-                FROM public.india_grids_54009 g
-                WHERE ST_Covers(
-                    g.geom_54009,
-                    ST_Transform(ST_PointOnSurface(r.geometry), 54009)
+        # Check if table exists
+        cursor.execute("SELECT to_regclass('public.osm_all_roads_grid') IS NOT NULL;")
+        table_exists = cursor.fetchone()[0]
+        
+        # Determine if current bbox is "test" or "all"
+        is_test_bbox = (
+            base_params["lat_min"] == TEST_LAT_MIN
+            and base_params["lat_max"] == TEST_LAT_MAX
+            and base_params["lon_min"] == TEST_LON_MIN
+            and base_params["lon_max"] == TEST_LON_MAX
+        )
+        
+        needs_recreate = False
+        if table_exists:
+            if is_test_bbox:
+                # For test bbox: if table exists, assume it's good
+                logger.info("Road-to-grid mapping table exists. Using existing table for test bbox.")
+            else:
+                # For all India bbox: check if table covers all India by sampling a point outside test bbox
+                # Sample point: use a point clearly outside test bbox but within all India
+                # e.g., (77.0, 11.0) - south of test bbox, or (80.0, 13.0) - east of test bbox
+                sample_lon = 80.0  # East of test bbox (test max is 79.0)
+                sample_lat = 13.0  # Within test lat range but east of test lon
+                
+                cursor.execute(
+                    """
+                    SELECT EXISTS(
+                        SELECT 1
+                        FROM osm_all_roads r
+                        WHERE r.bikable_road = TRUE
+                          AND r.geometry IS NOT NULL
+                          AND ST_Intersects(r.geometry, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+                          AND EXISTS (
+                              SELECT 1 FROM public.osm_all_roads_grid rg WHERE rg.osm_id = r.osm_id
+                          )
+                        LIMIT 1
+                    );
+                    """,
+                    (sample_lon, sample_lat),
                 )
-                ORDER BY g.grid_id
-                LIMIT 1
-            ) g ON TRUE
-            WHERE r.bikable_road = TRUE
-              AND r.geometry IS NOT NULL
-              AND r.geometry && ST_MakeEnvelope(%(lon_min)s, %(lat_min)s, %(lon_max)s, %(lat_max)s, 4326)
-              AND ST_Intersects(r.geometry, ST_MakeEnvelope(%(lon_min)s, %(lat_min)s, %(lon_max)s, %(lat_max)s, 4326));
-            """,
-            base_params,
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_osm_all_roads_grid_grid_id "
-            "ON public.osm_all_roads_grid (grid_id);"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_osm_all_roads_grid_osm_id "
-            "ON public.osm_all_roads_grid (osm_id);"
-        )
-    logger.info("Road-to-grid mapping table created.")
+                covers_all_india = cursor.fetchone()[0]
+                
+                if covers_all_india:
+                    logger.info("Road-to-grid mapping table exists and covers all India. Skipping creation.")
+                else:
+                    logger.info("Table exists but only covers test bbox. Recreating for all India...")
+                    needs_recreate = True
+        else:
+            logger.info("Road-to-grid mapping table not found. Creating...")
+            needs_recreate = True
+        
+        if needs_recreate:
+            cursor.execute("DROP TABLE IF EXISTS public.osm_all_roads_grid;")
+            cursor.execute(
+                """
+                CREATE UNLOGGED TABLE public.osm_all_roads_grid AS
+                SELECT
+                    r.osm_id,
+                    g.grid_id
+                FROM osm_all_roads r
+                JOIN LATERAL (
+                    SELECT g.grid_id
+                    FROM public.india_grids_54009 g
+                    WHERE ST_Covers(
+                        g.geom_54009,
+                        ST_Transform(ST_PointOnSurface(r.geometry), 54009)
+                    )
+                    ORDER BY g.grid_id
+                    LIMIT 1
+                ) g ON TRUE
+                WHERE r.bikable_road = TRUE
+                  AND r.geometry IS NOT NULL
+                  AND r.geometry && ST_MakeEnvelope(%(lon_min)s, %(lat_min)s, %(lon_max)s, %(lat_max)s, 4326)
+                  AND ST_Intersects(r.geometry, ST_MakeEnvelope(%(lon_min)s, %(lat_min)s, %(lon_max)s, %(lat_max)s, 4326));
+                """,
+                base_params,
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_osm_all_roads_grid_grid_id "
+                "ON public.osm_all_roads_grid (grid_id);"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_osm_all_roads_grid_osm_id "
+                "ON public.osm_all_roads_grid (osm_id);"
+            )
+            logger.info("Road-to-grid mapping table created.")
 
 
 def get_grid_id_range(conn):
@@ -299,10 +350,10 @@ def main():
             # 4. Run SQL Steps
             # Tuple format: (filename, is_chunked)
             sql_steps = [
-                ("01_worldcover_schema.sql", False),
-                ("02_worldcover_sampling.sql", True),  # Heavy operation, needs chunking
-                ("03_scenery_v2_classify.sql", False), # Usually fast, runs on processed rows
-                ("04_qc_samples.sql", False)
+            #    ("01_worldcover_schema.sql", False),
+            #    ("02_worldcover_sampling.sql", True),  # Heavy operation, needs chunking
+                ("03_scenery_v2_classify.sql", True),  # Chunked to avoid deadlocks and show progress
+            #    ("04_qc_samples.sql", False)
             ]
             
             for sql_file, is_chunked in sql_steps:

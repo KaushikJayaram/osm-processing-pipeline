@@ -18,6 +18,37 @@ except ImportError:
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# URBAN PRESSURE CONFIG (env overrides allowed)
+# ============================================================================
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y"}
+
+UP_LAT_MIN = float(os.getenv("URBAN_PRESSURE_LAT_MIN", 6.5))
+UP_LAT_MAX = float(os.getenv("URBAN_PRESSURE_LAT_MAX", 35.5))
+UP_LON_MIN = float(os.getenv("URBAN_PRESSURE_LON_MIN", 68.0))
+UP_LON_MAX = float(os.getenv("URBAN_PRESSURE_LON_MAX", 97.5))
+
+UP_RECREATE_INDIA_GRIDS_54009 = _env_bool("URBAN_PRESSURE_RECREATE_INDIA_GRIDS_54009", False)
+UP_CHUNK_SIZE = int(os.getenv("URBAN_PRESSURE_CHUNK_SIZE", 200000))
+UP_PD_SAT = float(os.getenv("URBAN_PRESSURE_PD_SAT", 50000))
+UP_NEIGHBOR_RADIUS = float(os.getenv("URBAN_PRESSURE_NEIGHBOR_RADIUS", 2000))
+UP_RASTER_TILE_SIZE = int(os.getenv("URBAN_PRESSURE_RASTER_TILE_SIZE", 256))
+
+UP_POP_RASTER_PATH = os.getenv(
+    "URBAN_PRESSURE_POP_RASTER_PATH",
+    resolve_project_path("data/GHSL_data/GHS_POP_E2030_GLOBE_R2023A_54009_100_V1_0.tif"),
+)
+UP_BUILT_RASTER_PATH = os.getenv(
+    "URBAN_PRESSURE_BUILT_RASTER_PATH",
+    resolve_project_path("data/GHSL_data/GHS_BUILT_S_E2030_GLOBE_R2023A_54009_100_V1_0.tif"),
+)
+UP_POP_TABLE = "public.ghs_pop_e2030_r2023a_54009_100"
+UP_BUILT_TABLE = "public.ghs_built_s_e2030_r2023a_54009_100"
+
 def log_print(message, level='info'):
     """Print to console and log to file."""
     print(message)
@@ -48,8 +79,12 @@ def execute_sql_file(cursor, filepath, params=None):
 
     # If parameters are provided, format the SQL query dynamically
     if params:
-        csv_path = params['csv_path']
-        sql_query = sql_query.replace(":csv_path", f"'{csv_path}'")\
+        for key, value in params.items():
+            if key == "csv_path":
+                replacement = f"'{value}'"
+            else:
+                replacement = str(value)
+            sql_query = sql_query.replace(f":{key}", replacement)
 
     cursor.execute(sql_query)
 
@@ -77,6 +112,32 @@ def table_exists(db_name, db_user, db_host, db_port, db_password, table_name):
     cursor.close()
     conn.close()
     return table_exists
+
+def table_exists_conn(conn, schema, table):
+    """Checks if a table exists using an existing connection."""
+    full_name = f"{schema}.{table}"
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT to_regclass(%s) IS NOT NULL;", (full_name,))
+        return cursor.fetchone()[0]
+
+def import_raster_54009(table_name, raster_path, db_config):
+    """Imports a raster into PostGIS using raster2pgsql (EPSG:54009)."""
+    if not os.path.exists(raster_path):
+        raise FileNotFoundError(f"Raster file not found: {raster_path}")
+
+    cmd = (
+        f'raster2pgsql -s 54009 -I -C -M -t {UP_RASTER_TILE_SIZE}x{UP_RASTER_TILE_SIZE} '
+        f'"{raster_path}" {table_name} | '
+        f'psql -d {db_config["name"]} -U {db_config["user"]} '
+        f'-h {db_config["host"]} -p {db_config["port"]}'
+    )
+
+    env = os.environ.copy()
+    if db_config.get("password"):
+        env["PGPASSWORD"] = db_config["password"]
+
+    log_print(f"[urban_pressure] Importing raster to {table_name}")
+    subprocess.run(cmd, shell=True, check=True, env=env)
 
 def load_raster_data(db_config):
     """Loads raster data into PostGIS using raster2pgsql."""
@@ -310,32 +371,124 @@ def add_custom_tags(db_config):
     # Step 2: Load raster data
     load_raster_data(db_config)
 
-    # **PART 1: Setting Road Classification**
-    log_print("[add_custom_tags] Part 1: Setting Road Classification...")
-    sql_dir = resolve_project_path("sql/road_classification")
+    # **PART 1: Urban Pressure + Road Classification**
+    log_print("[add_custom_tags] Part 1: Urban Pressure + Road Classification...")
+    road_sql_dir = resolve_project_path("sql/road_classification")
 
-    # Step 1: Handle india_grids
+    # Step 1: Ensure india_grids exists (required for urban pressure overlay)
     if table_exists(db_config['name'], db_config['user'], db_config['host'], db_config['port'], db_config['password'], 'india_grids'):
         log_print("[INFO] Table 'india_grids' already exists, skipping creation.")
     else:
         log_print("[INFO] Table 'india_grids' does not exist, generating grids from scratch.")
-        execute_sql_file(cursor, os.path.join(sql_dir, "01_create_india_grids.sql"))
+        execute_sql_file(cursor, os.path.join(road_sql_dir, "01_create_india_grids.sql"))
+        conn.commit()
 
+    # Step 2: Urban pressure pipeline (mirrors dev-run logic)
+    log_print("[add_custom_tags] Running urban pressure SQL pipeline...")
+    urban_sql_dir = resolve_project_path("sql/urban_pressure")
+
+    # Idempotent raster imports for urban pressure
+    if not table_exists_conn(conn, "public", "ghs_pop_e2030_r2023a_54009_100"):
+        import_raster_54009(UP_POP_TABLE, UP_POP_RASTER_PATH, db_config)
+    else:
+        log_print(f"[urban_pressure] Raster table exists: {UP_POP_TABLE} (skipping import)")
+
+    if not table_exists_conn(conn, "public", "ghs_built_s_e2030_r2023a_54009_100"):
+        import_raster_54009(UP_BUILT_TABLE, UP_BUILT_RASTER_PATH, db_config)
+    else:
+        log_print(f"[urban_pressure] Raster table exists: {UP_BUILT_TABLE} (skipping import)")
+
+    # Optional full rebuild of india_grids_54009 overlay
+    if table_exists_conn(conn, "public", "india_grids_54009") and UP_RECREATE_INDIA_GRIDS_54009:
+        log_print("[urban_pressure] Dropping public.india_grids_54009 for rebuild")
+        with conn.cursor() as drop_cursor:
+            drop_cursor.execute("DROP TABLE IF EXISTS public.india_grids_54009;")
+        conn.commit()
+
+    urban_sql_files = [
+        "00_prerequisites.sql",
+        "01_create_india_grids_54009.sql",
+        "02_add_target_columns.sql",
+    ]
+
+    for sql_file in urban_sql_files:
+        filepath = os.path.join(urban_sql_dir, sql_file)
+        params = None
+        if sql_file == "01_create_india_grids_54009.sql":
+            params = {
+                "lat_min": UP_LAT_MIN,
+                "lat_max": UP_LAT_MAX,
+                "lon_min": UP_LON_MIN,
+                "lon_max": UP_LON_MAX,
+            }
+        execute_sql_file(cursor, filepath, params=params)
+        conn.commit()
+
+    # Chunked processing for heavy steps
+    with conn.cursor() as stats_cursor:
+        stats_cursor.execute(
+            "SELECT COUNT(*), MIN(grid_id), MAX(grid_id) FROM public.india_grids_54009;"
+        )
+        total_grids, min_id, max_id = stats_cursor.fetchone()
+
+    if min_id is None or max_id is None:
+        raise RuntimeError("No rows found in public.india_grids_54009. Aborting urban pressure.")
+
+    total_chunks = ((max_id - min_id) // UP_CHUNK_SIZE) + 1
+    log_print(
+        f"[urban_pressure] Grid range: {min_id}..{max_id} | total_grids={total_grids} | "
+        f"chunks={total_chunks} (chunk_size={UP_CHUNK_SIZE})"
+    )
+
+    def run_chunked(sql_name, extra_params=None):
+        sql_path = os.path.join(urban_sql_dir, sql_name)
+        chunk_index = 0
+        for start_id in range(min_id, max_id + 1, UP_CHUNK_SIZE):
+            end_id = min(start_id + UP_CHUNK_SIZE - 1, max_id)
+            params = {"grid_id_min": start_id, "grid_id_max": end_id}
+            if extra_params:
+                params.update(extra_params)
+
+            chunk_index += 1
+            progress_pct = (chunk_index / total_chunks) * 100.0
+            log_print(
+                f"[urban_pressure] Chunk {sql_name}: {chunk_index}/{total_chunks} "
+                f"({progress_pct:.1f}%) grid_id {start_id}..{end_id}"
+            )
+
+            with conn.cursor() as chunk_cursor:
+                execute_sql_file(chunk_cursor, sql_path, params=params)
+            conn.commit()
+
+    run_chunked("03_zonal_pop_count_chunked.sql")
+    run_chunked("04_zonal_built_up_chunked.sql")
+
+    with conn.cursor() as cursor_up:
+        execute_sql_file(
+            cursor_up,
+            os.path.join(urban_sql_dir, "05_compute_urban_pressure.sql"),
+            params={"pd_sat": UP_PD_SAT},
+        )
     conn.commit()
 
-    # Continue with the rest of the road classification SQL scripts
+    run_chunked(
+        "06_compute_reinforced_pressure_chunked.sql",
+        extra_params={"neighbor_radius": UP_NEIGHBOR_RADIUS},
+    )
+
+    with conn.cursor() as cursor_up:
+        execute_sql_file(cursor_up, os.path.join(urban_sql_dir, "07_classify_urban_class.sql"))
+    conn.commit()
+
+    # Continue with road classification SQL scripts
     road_classification_sql_files = [
-        "02_add_pop_density_and_built_up_area_data.sql",
-        "03_add_grid_classification_level1.sql",
         "04_prepare_osm_all_roads_table.sql",
-        "05_add_grid_classification_level2.sql",
         "06_handle_roads_intersecting_multiple_grids.sql",
         "07_assign_final_road_classification.sql",
-        #"09_add_mdr.sql",
     ]
 
     for sql_file in road_classification_sql_files:
-        filepath = os.path.join(sql_dir, sql_file)
+        filepath = os.path.join(road_sql_dir, sql_file)
         if os.path.exists(filepath):
             execute_sql_file(cursor, filepath)
             conn.commit()

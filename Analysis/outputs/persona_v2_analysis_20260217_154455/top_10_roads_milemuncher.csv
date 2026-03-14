@@ -1,0 +1,11 @@
+osm_id,name,road_type_i1,score_urban_gate,score_cruise_road,score_offroad,score_calm_road,score_flow,score_remoteness,score_twist,score_scenic,persona_milemuncher_score,persona_cornercraver_score,persona_trailblazer_score,persona_tranquiltraveller_score,persona
+1287942496,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.7918,0.0,1.0,0.9208,0.0,0.0563,0.207,milemuncher
+53754963,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.832,0.0,1.0,0.9168,0.0,0.057,0.2087,milemuncher
+789173207,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.8506,0.0,1.0,0.9149,0.0,0.0573,0.2095,milemuncher
+789173209,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.8506,0.0,1.0,0.9149,0.0,0.0573,0.2095,milemuncher
+24430777,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.8506,0.0,1.0,0.9149,0.0,0.0573,0.2095,milemuncher
+1352001636,,NH,1.0,1.0,0.08,0.216,1.0,0.873,0.0,1.0,0.9127,0.0,0.0577,0.2105,milemuncher
+1352001634,,NH,1.0,1.0,0.08,0.216,1.0,0.873,0.0,1.0,0.9127,0.0,0.0577,0.2105,milemuncher
+183869101,NICE Expressway,NH,1.0,1.0,0.08,0.216,1.0,0.7747,0.0,0.88,0.9115,0.0,0.0546,0.1988,milemuncher
+788462099,NICE Expressway,NH,1.0,1.0,0.08,0.216,1.0,0.7754,0.0,0.88,0.9114,0.0,0.0546,0.1989,milemuncher
+160015344,NICE Peripheral Ring Road,NH,1.0,1.0,0.08,0.216,1.0,0.7831,0.0,0.88,0.9106,0.0,0.0547,0.1992,milemuncher

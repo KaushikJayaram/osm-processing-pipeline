@@ -61,6 +61,12 @@ This directory contains legacy implementations that have been replaced by newer 
 - `01_drop_create_india_grids.sql` - Minimal table creation stub (replaced by `01_create_india_grids.sql` which does full grid generation)
 - `09_add_mdr.sql` - Obsolete MDR classification script (commented out, uses outdated `road_classification_i1 = 'Interior'` logic that doesn't exist in current system)
 
+### Road Classification (Superseded by Urban Pressure)
+**Files:**
+- `02_add_pop_density_and_built_up_area_data.sql` - Replaced by `sql/urban_pressure/*` (GHSL-based pop/built processing)
+- `03_add_grid_classification_level1.sql` - Replaced by `sql/urban_pressure/07_classify_urban_class.sql` writing `grid_classification_l1`
+- `05_add_grid_classification_level2.sql` - No longer used (NH/SH split removed from grid classification)
+
 **Status:** Obsolete scripts kept for reference only. Not used in current pipeline.
 
 ---

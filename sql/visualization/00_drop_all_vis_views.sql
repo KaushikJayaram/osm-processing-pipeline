@@ -53,6 +53,38 @@ DROP MATERIALIZED VIEW IF EXISTS vis.map_intersection_density_z6;
 DROP MATERIALIZED VIEW IF EXISTS vis.map_intersection_density_z10;
 DROP MATERIALIZED VIEW IF EXISTS vis.map_intersection_density_z14;
 
+-- Persona v2 parameter scores
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_urban_gate_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_cruise_road_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_offroad_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_calm_road_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_flow_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_remoteness_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_twist_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_score_scenic_z10;
+
+-- Persona v2 scores
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_milemuncher_v2_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_cornercraver_v2_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_trailblazer_v2_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_tranquiltraveller_v2_z10;
+
+-- Road attributes
+DROP MATERIALIZED VIEW IF EXISTS vis.map_fourlane_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_avg_speed_kph_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_road_type_i1_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_road_setting_i1_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_road_classification_v2_z10;
+
+-- Simplified persona scores
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_milemuncher_simplified_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_cornercraver_simplified_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_trailblazer_simplified_z10;
+DROP MATERIALIZED VIEW IF EXISTS vis.map_persona_tranquiltraveller_simplified_z10;
+
+-- Urban grids
+DROP MATERIALIZED VIEW IF EXISTS vis.map_urban_grids_z10;
+
 -- ============================================================================
 -- Summary
 -- ============================================================================

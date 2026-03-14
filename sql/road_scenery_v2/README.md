@@ -42,5 +42,5 @@ This module implements scenery classification using the ESA WorldCover 2020 map 
     - Water: Permanent water (80)
 - **Classification**:
     - Urban/SemiUrban tags from `road_scenery_urban` take precedence.
-    - Otherwise, dominant fraction (>= 0.35) determines `scenery_v2_primary`.
+    - Otherwise, dominant fraction (>= 0.35) determines `road_scenery_primary`.
     - Secondary tags set if fraction >= 0.20.
